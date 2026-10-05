@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "FHS Repartidor",
+    "slug": "fhs-repartidor",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FF441F"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "FHS Repartidor necesita acceso a tu ubicación para mostrarte en el radar los comercios cercanos, compañeros de ruta y asignarte pedidos en tu área.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "FHS Repartidor necesita tu ubicación para actualizar el progreso de la entrega en tiempo real.",
+        "NSBluetoothAlwaysUsageDescription": "FHS Repartidor utiliza Bluetooth para conectar datáfonos y accesorios de entrega."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FF441F"
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "BLUETOOTH",
+        "BLUETOOTH_ADMIN",
+        "BLUETOOTH_CONNECT"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "FHS Repartidor necesita acceso a tu ubicación para el radar y navegación de pedidos."
+        }
+      ]
+    ]
+  }
+}

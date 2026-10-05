@@ -1,22 +1,40 @@
 {
-  "name": "videos",
+  "name": "fhs-suite",
   "version": "1.0.0",
-  "main": "index.ts",
+  "private": true,
+  "workspaces": [
+    "repartidor",
+    "administrador",
+    "prueba",
+    "servidor",
+    "cliente"
+  ],
+  "scripts": {
+    "start:servidor": "npm --prefix servidor start",
+    "start:repartidor": "npm --prefix repartidor start",
+    "start:administrador": "npm --prefix administrador start",
+    "start:prueba": "npm --prefix prueba start",
+    "start:cliente": "npm --prefix cliente start",
+    "web:repartidor": "npm --prefix repartidor run web",
+    "web:administrador": "npm --prefix administrador run web",
+    "web:prueba": "npm --prefix prueba run web",
+    "web:cliente": "npm --prefix cliente run web"
+  },
   "dependencies": {
+    "@expo/vector-icons": "^15.0.2",
     "expo": "~57.0.26",
+    "expo-font": "~57.0.4",
+    "expo-location": "~57.0.20",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
-    "react-native": "0.86.3"
+    "react-dom": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-web": "^0.21.2",
+    "react-native-webview": "13.16.1"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
     "typescript": "~6.0.3"
-  },
-  "scripts": {
-    "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web"
-  },
-  "private": true
+  }
 }

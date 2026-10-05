@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "FHS Cliente",
+    "slug": "fhs-cliente",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FF441F"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "FHS necesita acceso a tu ubicación para mostrarte restaurantes y tiendas cercanas con entrega a domicilio.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "FHS necesita tu ubicación para rastrear el repartidor que lleva tu pedido.",
+        "NSBluetoothAlwaysUsageDescription": "FHS utiliza Bluetooth para conectarse con accesorios y datáfonos de pago."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FF441F"
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "BLUETOOTH",
+        "BLUETOOTH_ADMIN",
+        "BLUETOOTH_CONNECT"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "FHS necesita tu ubicación para mostrarte tiendas cercanas y entregas a domicilio."
+        }
+      ]
+    ]
+  }
+}

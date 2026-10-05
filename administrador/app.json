@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "FHS Administrador",
+    "slug": "fhs-administrador",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#121418"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "FHS Administrador necesita acceso a tu ubicación para centrar la flota y monitorear el mapa operativo.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "FHS Administrador necesita tu ubicación para monitoreo de flota en tiempo real.",
+        "NSBluetoothAlwaysUsageDescription": "FHS Administrador utiliza Bluetooth para comunicarse con accesorios de terminal."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#121418"
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "BLUETOOTH",
+        "BLUETOOTH_ADMIN",
+        "BLUETOOTH_CONNECT"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "FHS Administrador necesita tu ubicación para centrar la flota y monitorear el mapa operativo."
+        }
+      ]
+    ]
+  }
+}

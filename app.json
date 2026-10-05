@@ -7,7 +7,12 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "FHS necesita acceso a tu ubicación para el mapa y servicios de entrega.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "FHS necesita tu ubicación para monitorear entregas en tiempo real.",
+        "NSBluetoothAlwaysUsageDescription": "FHS utiliza Bluetooth para accesorios y terminales de cobro."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -16,10 +21,26 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "BLUETOOTH",
+        "BLUETOOTH_ADMIN",
+        "BLUETOOTH_CONNECT"
+      ],
       "predictiveBackGestureEnabled": false
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "FHS necesita tu ubicación para el mapa y navegación."
+        }
+      ]
+    ]
   }
 }

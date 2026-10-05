@@ -1,0 +1,346 @@
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import {
+  DriverProfile,
+  PartnerStore,
+  Coworker,
+  DeliveryOrder,
+  CommunityMessage,
+  MessageTag,
+} from '../types';
+import {
+  INITIAL_DRIVER_PROFILE,
+  MOCK_PARTNER_STORES,
+  MOCK_COWORKERS,
+  MOCK_COMMUNITY_MESSAGES,
+  SAMPLE_INCOMING_ORDER,
+  INITIAL_DELIVERY_STARS,
+} from '../data/mockData';
+import { FHSApiService } from '../services/api';
+
+export type UserRole = 'repartidor' | 'admin' | 'test_lab';
+
+interface AppContextType {
+  role: UserRole;
+  setRole: (role: UserRole) => void;
+  serverConnected: boolean;
+  serverUrl: string;
+  setServerUrl: (url: string) => void;
+
+  driver: DriverProfile;
+  updateDriver: (updated: Partial<DriverProfile>) => void;
+
+  stores: PartnerStore[];
+  addStore: (newStore: PartnerStore) => void;
+  removeStore: (id: string) => void;
+
+  coworkers: Coworker[];
+  addCoworker: (newCoworker: Coworker) => void;
+  removeCoworker: (id: string) => void;
+  updateCoworkerStatus: (id: string, status: Coworker['status']) => void;
+  simulateCoworkersMovement: () => void;
+
+  allOrders: DeliveryOrder[];
+  incomingOrder: DeliveryOrder | null;
+  activeOrder: DeliveryOrder | null;
+  completedOrder: DeliveryOrder | null;
+  createAndDispatchOrder: (order: DeliveryOrder, target: 'repartidor' | 'fleet') => void;
+  acceptIncomingOrder: (order: DeliveryOrder) => void;
+  rejectIncomingOrder: () => void;
+  advanceActiveOrderStep: () => void;
+  completeActiveOrder: () => void;
+  dismissCompletedOrder: () => void;
+  assignOrderToCoworker: (orderId: string, coworkerId: string) => void;
+
+  communityMessages: CommunityMessage[];
+  sendCommunityMessage: (text: string, tag: MessageTag, customSender?: string) => void;
+
+  deliveryStars: import('../types').DeliveryStar[];
+  addDeliveryStar: (star: Omit<import('../types').DeliveryStar, 'id' | 'createdAt'>) => Promise<void>;
+
+  serverOnlineNotice: string | null;
+  dismissServerOnlineNotice: () => void;
+
+  resetToMockData: () => void;
+}
+
+const AppContext = createContext<AppContextType | undefined>(undefined);
+
+export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [role, setRole] = useState<UserRole>('repartidor');
+  const [serverConnected, setServerConnected] = useState(false);
+  const [serverUrl, setServerUrlState] = useState(FHSApiService.getServerUrl());
+
+  const [driver, setDriver] = useState<DriverProfile>(INITIAL_DRIVER_PROFILE);
+  const [stores, setStores] = useState<PartnerStore[]>(MOCK_PARTNER_STORES);
+  const [coworkers, setCoworkers] = useState<Coworker[]>(MOCK_COWORKERS);
+  const [allOrders, setAllOrders] = useState<DeliveryOrder[]>([SAMPLE_INCOMING_ORDER]);
+  const [incomingOrder, setIncomingOrder] = useState<DeliveryOrder | null>(null);
+  const [activeOrder, setActiveOrder] = useState<DeliveryOrder | null>(null);
+  const [completedOrder, setCompletedOrder] = useState<DeliveryOrder | null>(null);
+  const [communityMessages, setCommunityMessages] = useState<CommunityMessage[]>(MOCK_COMMUNITY_MESSAGES);
+  const [deliveryStars, setDeliveryStars] = useState<import('../types').DeliveryStar[]>(INITIAL_DELIVERY_STARS);
+  const [serverOnlineNotice, setServerOnlineNotice] = useState<string | null>(null);
+
+  const setServerUrl = (url: string) => {
+    FHSApiService.setServerUrl(url);
+    setServerUrlState(url);
+  };
+
+  useEffect(() => {
+    if (serverOnlineNotice) {
+      const timer = setTimeout(() => {
+        setServerOnlineNotice(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [serverOnlineNotice]);
+
+  // Sync with Server loop
+  useEffect(() => {
+    let isMounted = true;
+
+    const syncWithBackend = async () => {
+      const health = await FHSApiService.checkHealth();
+      if (!isMounted) return;
+
+      if (health && health.online) {
+        if (!serverConnected) {
+          setServerOnlineNotice('🟢 Servidor FHS en Línea • Conexión confirmada');
+        }
+        setServerConnected(true);
+
+        const serverStores = await FHSApiService.getStores();
+        if (serverStores && isMounted) setStores(serverStores);
+
+        const serverWorkers = await FHSApiService.getWorkers();
+        if (serverWorkers && isMounted) setCoworkers(serverWorkers);
+
+        const serverOrders = await FHSApiService.getOrders();
+        if (serverOrders && isMounted) {
+          setAllOrders(serverOrders);
+          const pending = serverOrders.find((o) => o.status === 'ofertado');
+          if (pending && !activeOrder) {
+            setIncomingOrder(pending);
+          }
+        }
+
+        const serverMessages = await FHSApiService.getMessages();
+        if (serverMessages && isMounted) setCommunityMessages(serverMessages);
+
+        const serverStars = await FHSApiService.getDeliveryStars();
+        if (serverStars && isMounted) setDeliveryStars(serverStars);
+      } else {
+        setServerConnected(false);
+      }
+    };
+
+    syncWithBackend();
+    const interval = setInterval(syncWithBackend, 3000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [serverConnected, activeOrder]);
+
+  const updateDriver = (updated: Partial<DriverProfile>) => {
+    setDriver((prev) => ({ ...prev, ...updated }));
+  };
+
+  const addStore = async (newStore: PartnerStore) => {
+    setStores((prev) => [newStore, ...prev]);
+    await FHSApiService.createStore(newStore);
+  };
+
+  const removeStore = (id: string) => {
+    setStores((prev) => prev.filter((s) => s.id !== id));
+  };
+
+  const addCoworker = async (newCoworker: Coworker) => {
+    setCoworkers((prev) => [newCoworker, ...prev]);
+    await FHSApiService.createWorker(newCoworker);
+  };
+
+  const removeCoworker = (id: string) => {
+    setCoworkers((prev) => prev.filter((c) => c.id !== id));
+  };
+
+  const updateCoworkerStatus = async (id: string, status: Coworker['status']) => {
+    setCoworkers((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, status, lastUpdate: 'Modificado' } : c))
+    );
+    await FHSApiService.updateWorker(id, { status });
+  };
+
+  const simulateCoworkersMovement = async () => {
+    const updated = await FHSApiService.simulateMovement();
+    if (updated) {
+      setCoworkers(updated);
+    } else {
+      setCoworkers((prev) =>
+        prev.map((c) => {
+          const deltaLat = (Math.random() - 0.5) * 0.0016;
+          const deltaLng = (Math.random() - 0.5) * 0.0016;
+          return {
+            ...c,
+            coordinates: {
+              latitude: Number((c.coordinates.latitude + deltaLat).toFixed(5)),
+              longitude: Number((c.coordinates.longitude + deltaLng).toFixed(5)),
+            },
+            batteryLevel: Math.max(10, c.batteryLevel - 1),
+          };
+        })
+      );
+    }
+  };
+
+  const createAndDispatchOrder = async (order: DeliveryOrder, target: 'repartidor' | 'fleet') => {
+    setAllOrders((prev) => [order, ...prev]);
+    if (target === 'repartidor') {
+      setIncomingOrder(order);
+    }
+    await FHSApiService.createOrder(order);
+  };
+
+  const acceptIncomingOrder = async (order: DeliveryOrder) => {
+    setIncomingOrder(null);
+    const active = { ...order, status: 'rumbo_tienda' as const };
+    setActiveOrder(active);
+    setAllOrders((prev) => prev.map((o) => (o.id === order.id ? active : o)));
+    await FHSApiService.updateOrderStatus(order.id, 'rumbo_tienda');
+  };
+
+  const rejectIncomingOrder = () => {
+    setIncomingOrder(null);
+  };
+
+  const advanceActiveOrderStep = async () => {
+    if (!activeOrder) return;
+    let nextStatus: DeliveryOrder['status'] = activeOrder.status;
+
+    if (activeOrder.status === 'rumbo_tienda') {
+      nextStatus = 'en_tienda';
+    } else if (activeOrder.status === 'en_tienda') {
+      nextStatus = 'rumbo_cliente';
+    }
+
+    const updated = { ...activeOrder, status: nextStatus };
+    setActiveOrder(updated);
+    setAllOrders((prev) => prev.map((o) => (o.id === activeOrder.id ? updated : o)));
+    await FHSApiService.updateOrderStatus(activeOrder.id, nextStatus);
+  };
+
+  const completeActiveOrder = async () => {
+    if (!activeOrder) return;
+    const finished: DeliveryOrder = { ...activeOrder, status: 'entregado' };
+    setCompletedOrder(finished);
+    setActiveOrder(null);
+
+    setAllOrders((prev) => prev.map((o) => (o.id === activeOrder.id ? finished : o)));
+    await FHSApiService.updateOrderStatus(activeOrder.id, 'entregado');
+
+    updateDriver({
+      todayEarnings: driver.todayEarnings + finished.totalEarnings,
+      totalOrdersToday: driver.totalOrdersToday + 1,
+      tipsToday: driver.tipsToday + finished.customerTip,
+      balanceAvailable: driver.balanceAvailable + finished.totalEarnings,
+    });
+  };
+
+  const dismissCompletedOrder = () => {
+    setCompletedOrder(null);
+  };
+
+  const assignOrderToCoworker = async (orderId: string, coworkerId: string) => {
+    setAllOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? { ...o, status: 'rumbo_tienda' } : o))
+    );
+    await FHSApiService.assignOrder(orderId, coworkerId);
+  };
+
+  const sendCommunityMessage = async (text: string, tag: MessageTag, customSender?: string) => {
+    const newMsg: CommunityMessage = {
+      id: `msg-${Date.now()}`,
+      senderId: customSender ? 'admin' : driver.id,
+      senderName: customSender || `${driver.name} (Tú)`,
+      senderVehicle: customSender ? 'auto' : driver.vehicle,
+      text,
+      timeAgo: 'Justo ahora',
+      tag,
+      likes: 1,
+    };
+    setCommunityMessages((prev) => [newMsg, ...prev]);
+    await FHSApiService.sendMessage(newMsg);
+  };
+
+  const addDeliveryStar = async (starData: Omit<import('../types').DeliveryStar, 'id' | 'createdAt'>) => {
+    const newStar: import('../types').DeliveryStar = {
+      id: `star-${Date.now().toString().slice(-4)}`,
+      createdAt: 'Justo ahora',
+      ...starData,
+    };
+    setDeliveryStars((prev) => [newStar, ...prev]);
+    await FHSApiService.createDeliveryStar(newStar);
+  };
+
+  const resetToMockData = async () => {
+    setDriver(INITIAL_DRIVER_PROFILE);
+    setStores(MOCK_PARTNER_STORES);
+    setCoworkers(MOCK_COWORKERS);
+    setCommunityMessages(MOCK_COMMUNITY_MESSAGES);
+    setIncomingOrder(null);
+    setActiveOrder(null);
+    setCompletedOrder(null);
+    await FHSApiService.resetData();
+  };
+
+  return (
+    <AppContext.Provider
+      value={{
+        role,
+        setRole,
+        serverConnected,
+        serverUrl,
+        setServerUrl,
+        driver,
+        updateDriver,
+        stores,
+        addStore,
+        removeStore,
+        coworkers,
+        addCoworker,
+        removeCoworker,
+        updateCoworkerStatus,
+        simulateCoworkersMovement,
+        allOrders,
+        incomingOrder,
+        activeOrder,
+        completedOrder,
+        createAndDispatchOrder,
+        acceptIncomingOrder,
+        rejectIncomingOrder,
+        advanceActiveOrderStep,
+        completeActiveOrder,
+        dismissCompletedOrder,
+        assignOrderToCoworker,
+        communityMessages,
+        sendCommunityMessage,
+        deliveryStars,
+        addDeliveryStar,
+        resetToMockData,
+        serverOnlineNotice,
+        dismissServerOnlineNotice: () => setServerOnlineNotice(null),
+      }}
+    >
+      {children}
+    </AppContext.Provider>
+  );
+};
+
+export const useApp = () => {
+  const context = useContext(AppContext);
+  if (!context) {
+    throw new Error('useApp must be used within an AppProvider');
+  }
+  return context;
+};
