@@ -2,28 +2,37 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { ClientProvider, useClient } from './src/context/ClientContext';
 import { StoreCatalogScreen } from './src/screens/StoreCatalogScreen';
 import { StoreDetailScreen } from './src/screens/StoreDetailScreen';
-import { ExpressDeliveryScreen } from './src/screens/ExpressDeliveryScreen';
 import { CartScreen } from './src/screens/CartScreen';
 import { OrderTrackingScreen } from './src/screens/OrderTrackingScreen';
 import { PartnerStore } from './src/types';
+import { AURA_THEME } from '../src/theme/auraTheme';
 
-type ClientTab = 'tiendas' | 'express' | 'carrito' | 'pedidos';
+type ClientTab = 'inicio' | 'sedes' | 'carrito' | 'pedidos';
 
-const MainClientNavigator: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<ClientTab>('tiendas');
+export interface ClienteAppProps {
+  onLogout?: () => void;
+  currentUser?: {
+    id?: string;
+    name?: string;
+    email?: string;
+    role?: string;
+  } | null;
+  [key: string]: any;
+}
+
+const MainClientNavigator: React.FC<ClienteAppProps> = ({ onLogout, currentUser }) => {
+  const [activeTab, setActiveTab] = useState<ClientTab>('inicio');
   const [selectedStore, setSelectedStore] = useState<PartnerStore | null>(null);
 
-  const { totalCartItemCount, orders } = useClient();
-
-  // Active uncompleted orders count
-  const pendingOrdersCount = orders.filter((o) => o.status !== 'entregado').length;
+  const { totalCartItemCount, orders, stores } = useClient();
 
   const handleSelectStore = (store: PartnerStore) => {
     setSelectedStore(store);
+    setActiveTab('sedes');
   };
 
   const handleBackToStores = () => {
@@ -41,88 +50,126 @@ const MainClientNavigator: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.rootContainer} edges={['top', 'left', 'right']}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
+
+      {/* Top Bar matching estilo.pdf */}
+      <View style={styles.clientTopBar}>
+        <View style={styles.topBarContent}>
+          <View style={styles.brandRow}>
+            <View style={styles.brandIconBox}>
+              <MaterialCommunityIcons name="flower-tulip-outline" size={18} color={AURA_THEME.colors.forestDark} />
+            </View>
+            <View>
+              <Text style={styles.appTitle}>AURA BOTANICALS</Text>
+              <Text style={styles.locationSubtitle}>
+                Sede Jardines del Valle • 1.8 km · Llegada ~18:42
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.rightActionsRow}>
+            {currentUser && (
+              <View style={styles.userInfoPill}>
+                <Ionicons name="person-circle-outline" size={14} color={AURA_THEME.colors.forestDark} />
+                <Text style={styles.userNameText} numberOfLines={1}>
+                  {currentUser.name}
+                </Text>
+              </View>
+            )}
+
+            {onLogout && (
+              <TouchableOpacity
+                style={styles.logoutBtn}
+                onPress={onLogout}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="log-out-outline" size={14} color={AURA_THEME.colors.terracotta} />
+                <Text style={styles.logoutBtnText}>Salir</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {/* Subheader info chip */}
+        <View style={styles.ecoNoticeBar}>
+          <Ionicons name="shield-checkmark" size={12} color={AURA_THEME.colors.forestDark} />
+          <Text style={styles.ecoNoticeText}>
+            Entrega estimada ~25-35 min • 0% Huella de Carbono • Empaque térmico de lino
+          </Text>
+        </View>
+      </View>
 
       {/* Screen Views */}
       <View style={styles.screenContainer}>
-        {activeTab === 'tiendas' && (
-          selectedStore ? (
-            <StoreDetailScreen
-              store={selectedStore}
-              onBack={handleBackToStores}
-              onGoToCart={handleGoToCart}
-            />
-          ) : (
-            <StoreCatalogScreen
-              onSelectStore={handleSelectStore}
-              onGoToExpress={() => setActiveTab('express')}
-              onGoToCart={handleGoToCart}
-            />
-          )
+        {activeTab === 'inicio' && (
+          <StoreCatalogScreen
+            onSelectStore={handleSelectStore}
+            onGoToExpress={() => setActiveTab('carrito')}
+            onGoToCart={handleGoToCart}
+          />
         )}
 
-        {activeTab === 'express' && (
-          <ExpressDeliveryScreen onOrderPlaced={handleOrderPlaced} />
+        {activeTab === 'sedes' && (
+          <StoreDetailScreen
+            store={selectedStore || stores[0]}
+            onBack={handleBackToStores}
+            onGoToCart={handleGoToCart}
+          />
         )}
 
         {activeTab === 'carrito' && (
           <CartScreen
             onOrderSuccess={handleOrderPlaced}
-            onExploreMore={() => setActiveTab('tiendas')}
+            onExploreMore={() => setActiveTab('inicio')}
           />
         )}
 
         {activeTab === 'pedidos' && (
-          <OrderTrackingScreen onGoToStores={() => setActiveTab('tiendas')} />
+          <OrderTrackingScreen onGoToStores={() => setActiveTab('inicio')} />
         )}
       </View>
 
-      {/* Bottom Navigation Bar */}
+      {/* Bottom Navigation Bar matching estilo.pdf */}
       <View style={styles.bottomNav}>
-        {/* Tab 1: Tiendas */}
+        {/* Tab 1: Inicio */}
         <TouchableOpacity
           style={styles.navItem}
-          onPress={() => {
-            setSelectedStore(null);
-            setActiveTab('tiendas');
-          }}
+          onPress={() => setActiveTab('inicio')}
           activeOpacity={0.8}
         >
           <Ionicons
-            name={activeTab === 'tiendas' ? 'storefront' : 'storefront-outline'}
+            name={activeTab === 'inicio' ? 'leaf' : 'leaf-outline'}
             size={22}
-            color={activeTab === 'tiendas' ? '#FF441F' : '#8C96A5'}
+            color={activeTab === 'inicio' ? AURA_THEME.colors.forestDark : AURA_THEME.colors.textMuted}
           />
           <Text
             style={[
               styles.navLabel,
-              activeTab === 'tiendas' && styles.navLabelActive,
+              activeTab === 'inicio' && styles.navLabelActive,
             ]}
           >
-            Tiendas
+            Inicio
           </Text>
         </TouchableOpacity>
 
-        {/* Tab 2: Express / Mandados */}
+        {/* Tab 2: Sedes */}
         <TouchableOpacity
           style={styles.navItem}
-          onPress={() => setActiveTab('express')}
+          onPress={() => setActiveTab('sedes')}
           activeOpacity={0.8}
         >
-          <View style={styles.expressTabIcon}>
-            <Ionicons
-              name={activeTab === 'express' ? 'bicycle' : 'bicycle-outline'}
-              size={22}
-              color={activeTab === 'express' ? '#FF6F00' : '#8C96A5'}
-            />
-          </View>
+          <Ionicons
+            name={activeTab === 'sedes' ? 'business' : 'business-outline'}
+            size={22}
+            color={activeTab === 'sedes' ? AURA_THEME.colors.forestDark : AURA_THEME.colors.textMuted}
+          />
           <Text
             style={[
               styles.navLabel,
-              activeTab === 'express' && styles.navLabelActiveExpress,
+              activeTab === 'sedes' && styles.navLabelActive,
             ]}
           >
-            Express
+            Sedes
           </Text>
         </TouchableOpacity>
 
@@ -134,9 +181,9 @@ const MainClientNavigator: React.FC = () => {
         >
           <View style={styles.iconWithBadge}>
             <Ionicons
-              name={activeTab === 'carrito' ? 'cart' : 'cart-outline'}
+              name={activeTab === 'carrito' ? 'bag' : 'bag-outline'}
               size={22}
-              color={activeTab === 'carrito' ? '#FF441F' : '#8C96A5'}
+              color={activeTab === 'carrito' ? AURA_THEME.colors.forestDark : AURA_THEME.colors.textMuted}
             />
             {totalCartItemCount > 0 && (
               <View style={styles.badgeCircle}>
@@ -160,27 +207,18 @@ const MainClientNavigator: React.FC = () => {
           onPress={() => setActiveTab('pedidos')}
           activeOpacity={0.8}
         >
-          <View style={styles.iconWithBadge}>
-            <Ionicons
-              name={activeTab === 'pedidos' ? 'receipt' : 'receipt-outline'}
-              size={22}
-              color={activeTab === 'pedidos' ? '#FF441F' : '#8C96A5'}
-            />
-            {pendingOrdersCount > 0 && (
-              <View style={[styles.badgeCircle, { backgroundColor: '#00E676' }]}>
-                <Text style={[styles.badgeText, { color: '#000' }]}>
-                  {pendingOrdersCount}
-                </Text>
-              </View>
-            )}
-          </View>
+          <Ionicons
+            name={activeTab === 'pedidos' ? 'receipt' : 'receipt-outline'}
+            size={22}
+            color={activeTab === 'pedidos' ? AURA_THEME.colors.forestDark : AURA_THEME.colors.textMuted}
+          />
           <Text
             style={[
               styles.navLabel,
               activeTab === 'pedidos' && styles.navLabelActive,
             ]}
           >
-            Rastreo
+            Mis Pedidos
           </Text>
         </TouchableOpacity>
       </View>
@@ -188,11 +226,11 @@ const MainClientNavigator: React.FC = () => {
   );
 };
 
-export default function App() {
+export default function App({ onLogout, currentUser }: ClienteAppProps = {}) {
   return (
     <SafeAreaProvider>
       <ClientProvider>
-        <MainClientNavigator />
+        <MainClientNavigator onLogout={onLogout} currentUser={currentUser} />
       </ClientProvider>
     </SafeAreaProvider>
   );
@@ -201,62 +239,138 @@ export default function App() {
 const styles = StyleSheet.create({
   rootContainer: {
     flex: 1,
-    backgroundColor: '#0E1014',
+    backgroundColor: AURA_THEME.colors.bgPrimary,
+  },
+  clientTopBar: {
+    backgroundColor: AURA_THEME.colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: AURA_THEME.colors.borderLight,
+    paddingTop: 8,
+    paddingBottom: 6,
+    paddingHorizontal: 16,
+  },
+  topBarContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  brandIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: AURA_THEME.colors.sageBadge,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  appTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
+    letterSpacing: 1.2,
+  },
+  locationSubtitle: {
+    fontSize: 11,
+    color: AURA_THEME.colors.textSecondary,
+    marginTop: 1,
+  },
+  rightActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  userInfoPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: AURA_THEME.colors.bgSecondary,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: AURA_THEME.borderRadius.full,
+    gap: 4,
+  },
+  userNameText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: AURA_THEME.colors.forestDark,
+    maxWidth: 90,
+  },
+  logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: AURA_THEME.colors.terracottaSoft,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: AURA_THEME.borderRadius.full,
+    gap: 4,
+  },
+  logoutBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: AURA_THEME.colors.terracotta,
+  },
+  ecoNoticeBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: AURA_THEME.colors.sageBadge,
+    borderRadius: AURA_THEME.borderRadius.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    gap: 5,
+  },
+  ecoNoticeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: AURA_THEME.colors.forestDark,
   },
   screenContainer: {
     flex: 1,
   },
   bottomNav: {
     flexDirection: 'row',
-    backgroundColor: '#12151B',
+    backgroundColor: AURA_THEME.colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#202633',
+    borderTopColor: AURA_THEME.colors.borderLight,
     paddingVertical: 8,
-    paddingHorizontal: 8,
-    justifyContent: 'space-around',
-    alignItems: 'center',
+    paddingBottom: 16,
   },
   navItem: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
-    paddingVertical: 4,
   },
   navLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '600',
-    color: '#8C96A5',
+    color: AURA_THEME.colors.textMuted,
     marginTop: 3,
   },
   navLabelActive: {
-    color: '#FF441F',
+    color: AURA_THEME.colors.forestDark,
     fontWeight: '800',
-  },
-  navLabelActiveExpress: {
-    color: '#FF6F00',
-    fontWeight: '800',
-  },
-  expressTabIcon: {
-    position: 'relative',
   },
   iconWithBadge: {
     position: 'relative',
   },
   badgeCircle: {
     position: 'absolute',
-    top: -5,
-    right: -10,
-    backgroundColor: '#FF441F',
-    borderRadius: 9,
-    minWidth: 18,
-    height: 18,
-    justifyContent: 'center',
+    top: -4,
+    right: -8,
+    backgroundColor: AURA_THEME.colors.terracotta,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 3,
   },
   badgeText: {
-    color: '#FFF',
-    fontSize: 10,
+    color: '#FFFFFF',
+    fontSize: 9.5,
     fontWeight: '800',
   },
 });

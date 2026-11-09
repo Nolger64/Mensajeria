@@ -1,208 +1,204 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Text } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { PartnerStore, Coworker, DeliveryOrder, StoreCategory } from '../types';
-import { DriverHeader } from '../components/Header/DriverHeader';
-import { DriverMap } from '../components/Map/DriverMap';
-import { StoreDetailSheet } from '../components/Sheets/StoreDetailSheet';
-import { CoworkerDetailSheet } from '../components/Sheets/CoworkerDetailSheet';
-import { IncomingOrderModal } from '../components/Orders/IncomingOrderModal';
-import { ActiveOrderPanel } from '../components/Orders/ActiveOrderPanel';
-import { DeliverySuccessModal } from '../components/Orders/DeliverySuccessModal';
-import { CoworkerRadioModal } from '../components/Community/CoworkerRadioModal';
-import { SAMPLE_INCOMING_ORDER } from '../data/mockData';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+} from 'react-native';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
+import { AURA_THEME } from '../../../src/theme/auraTheme';
 
 export const DriverRadarScreen: React.FC = () => {
-  const {
-    driver,
-    updateDriver,
-    stores,
-    coworkers,
-    incomingOrder,
-    activeOrder,
-    completedOrder,
-    createAndDispatchOrder,
-    acceptIncomingOrder,
-    rejectIncomingOrder,
-    advanceActiveOrderStep,
-    completeActiveOrder,
-    dismissCompletedOrder,
-    communityMessages,
-    sendCommunityMessage,
-    deliveryStars,
-    dispatchMode,
-  } = useApp();
+  const { allOrders, acceptIncomingOrder } = useApp();
+  const [acceptedPriority, setAcceptedPriority] = useState(false);
 
-  // Layer toggles
-  const [showStores, setShowStores] = useState(true);
-  const [showCoworkers, setShowCoworkers] = useState(true);
-  const [showDemandZones, setShowDemandZones] = useState(true);
-
-  // Selected filters
-  const [selectedCategory, setSelectedCategory] = useState<StoreCategory>('todos');
-
-  // Modals & Selection state
-  const [selectedStore, setSelectedStore] = useState<PartnerStore | null>(null);
-  const [selectedCoworker, setSelectedCoworker] = useState<Coworker | null>(null);
-  const [isRadioOpen, setIsRadioOpen] = useState(false);
-
-  // Categories list
-  const categories: { key: StoreCategory; label: string; icon: string }[] = [
-    { key: 'todos', label: 'Todos', icon: '🌟' },
-    { key: 'restaurante', label: 'Restaurantes', icon: '🍔' },
-    { key: 'supermercado', label: 'Supermercados', icon: '🛒' },
-    { key: 'turbo', label: 'Turbo 10m', icon: '⚡' },
-    { key: 'farmacia', label: 'Farmacias', icon: '💊' },
-    { key: 'express', label: 'Express 24/7', icon: '🏪' },
-  ];
-
-  // Filter stores according to selected category
-  const filteredStores = stores.filter((s) => {
-    if (selectedCategory === 'todos') return true;
-    return s.category === selectedCategory;
-  });
-
-  // Handle incoming order simulation
-  const handleTriggerSimulatedOrder = () => {
-    createAndDispatchOrder(
-      {
-        ...SAMPLE_INCOMING_ORDER,
-        id: `ord-${Date.now().toString().slice(-4)}`,
-        orderCode: `#FHS-${Date.now().toString().slice(-4)}`,
-        status: 'ofertado',
-      },
-      'repartidor'
+  const handleAcceptPriority = () => {
+    setAcceptedPriority(true);
+    Alert.alert(
+      '🚴 Envío Sereno Aceptado',
+      'Dirígete a Sede Jardines del Valle para recoger el pedido #AUR-8921. Caja térmica regulada a 21°C.',
+      [{ text: 'Ver Navegación' }]
     );
-  };
-
-  // Quick order claim from store modal
-  const handleRequestOrderFromStore = (store: PartnerStore) => {
-    const customOrder: DeliveryOrder = {
-      ...SAMPLE_INCOMING_ORDER,
-      id: `ord-${Date.now().toString().slice(-4)}`,
-      orderCode: `#FHS-${Date.now().toString().slice(-4)}`,
-      store: store,
-      totalEarnings: 12000 + (store.hasBonus ? store.bonusAmount : 0),
-      basePay: 7500,
-      partnerBonus: store.bonusAmount,
-      customerTip: 4500,
-      status: 'ofertado',
-    };
-    acceptIncomingOrder(customOrder);
   };
 
   return (
     <View style={styles.container}>
-      {/* Top Driver Header */}
-      <DriverHeader
-        driver={driver}
-        onToggleOnline={(online) => updateDriver({ isOnline: online })}
-        onOpenRadio={() => setIsRadioOpen(true)}
-        onSimulateOrder={handleTriggerSimulatedOrder}
-      />
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* KPI Row matching Page 11 */}
+        <View style={styles.kpiRow}>
+          <View style={styles.kpiCard}>
+            <Text style={styles.kpiLabel}>COMPLETADAS</Text>
+            <Text style={styles.kpiValue}>4 rituales</Text>
+          </View>
+          <View style={styles.kpiCard}>
+            <Text style={styles.kpiLabel}>GANANCIA HOY</Text>
+            <Text style={[styles.kpiValue, { color: AURA_THEME.colors.forestDark }]}>$385 MXN</Text>
+          </View>
+          <View style={styles.kpiCard}>
+            <Text style={styles.kpiLabel}>ARMONÍA</Text>
+            <Text style={[styles.kpiValue, { color: AURA_THEME.colors.statusGreen }]}>98%</Text>
+            <Text style={styles.kpiSubText}>satisfacción</Text>
+          </View>
+        </View>
 
-      {/* Dispatch Mode & Status Banner */}
-      <View style={styles.dispatchStatusBar}>
-        <View style={[styles.dispatchModePill, dispatchMode === 'manual' ? styles.modeManual : styles.modeAuto]}>
-          <Ionicons
-            name={dispatchMode === 'manual' ? 'clipboard-outline' : 'flash'}
-            size={14}
-            color={dispatchMode === 'manual' ? '#1565C0' : '#E65100'}
-          />
-          <Text style={[styles.dispatchModeText, dispatchMode === 'manual' ? styles.textManual : styles.textAuto]}>
-            {dispatchMode === 'manual'
-              ? 'Modo: Asignación por Torre de Control (Por Defecto)'
-              : 'Modo: Asignación Automática por la App'}
+        {/* High Demand Botanical Banner */}
+        <View style={styles.demandBanner}>
+          <View style={styles.demandBadge}>
+            <Ionicons name="flame" size={12} color="#FFFFFF" />
+            <Text style={styles.demandBadgeText}>ALTA DEMANDA BOTÁNICA</Text>
+          </View>
+          <Text style={styles.demandTitle}>Sede Jardines del Valle & Providencia</Text>
+          <Text style={styles.demandDesc}>
+            Recibe +$35 MXN extra por cada entrega serena en esta franja.
           </Text>
         </View>
-        <View style={styles.radarStatusPill}>
-          <View style={styles.gpsDotLive} />
-          <Text style={styles.radarStatusText}>GPS Activo</Text>
+
+        {/* Available Immediate Orders List */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Envíos Inmediatos</Text>
+          <View style={styles.availableBadge}>
+            <Text style={styles.availableBadgeText}>3 disponibles</Text>
+          </View>
         </View>
-      </View>
 
-      {/* Interactive Map Area (Limpio: sin marcadores de prueba de tiendas ni domiciliarios) */}
-      <View style={styles.mapWrapper}>
-        <DriverMap
-          driverLocation={driver.coordinates}
-          stores={[]} // Sin tiendas de prueba
-          coworkers={[]} // Sin domiciliarios de prueba
-          deliveryStars={deliveryStars}
-          showStores={false}
-          showCoworkers={false}
-          showDemandZones={false}
-          activeOrder={activeOrder}
-          onToggleStores={() => {}}
-          onToggleCoworkers={() => {}}
-          onToggleDemandZones={() => {}}
-          onSelectStore={() => {}}
-          onSelectCoworker={() => {}}
-          onSelectDriver={() => {}}
-        />
+        {/* Card 1: Prioritario AUR-8921 */}
+        <View style={[styles.orderCard, styles.orderCardPriority]}>
+          <View style={styles.orderCardHeader}>
+            <View style={styles.priorityPill}>
+              <Text style={styles.priorityPillText}>PRIORITARIO</Text>
+            </View>
+            <Text style={styles.timerCountdown}>44s para expirar</Text>
+          </View>
 
-        {/* Mensaje de espera si está en modo manual y sin pedido activo */}
-        {!activeOrder && dispatchMode === 'manual' && (
-          <View style={styles.manualWaitOverlay}>
-            <Ionicons name="hourglass-outline" size={16} color="#1565C0" />
-            <Text style={styles.manualWaitText}>
-              Esperando que el administrador asigne un domicilio a tu moto/bici...
+          <Text style={styles.orderRouteTitle}>Ritual Express - Jardines</Text>
+          <Text style={styles.orderDestination}>Hacia Polanco V Secc</Text>
+
+          <View style={styles.orderMetricsRow}>
+            <View>
+              <Text style={styles.orderPriceHighlight}>$82.50 MXN</Text>
+              <Text style={styles.orderTipIncluded}>Propina incluida</Text>
+            </View>
+            <View style={styles.metaDivider} />
+            <View>
+              <Text style={styles.metaVal}>18 min</Text>
+              <Text style={styles.metaLabel}>estimados</Text>
+            </View>
+            <View style={styles.metaDivider} />
+            <View>
+              <Text style={styles.metaVal}>3.2 km</Text>
+              <Text style={styles.metaLabel}>totales</Text>
+            </View>
+          </View>
+
+          <View style={styles.fragileNotice}>
+            <Ionicons name="alert-circle" size={14} color={AURA_THEME.colors.terracotta} />
+            <Text style={styles.fragileText}>
+              2 frascos de esencias delicadas. Requiere soporte vertical en compartimento acolchado.
             </Text>
           </View>
-        )}
 
-        {/* Active Order HUD overlay at bottom of screen if delivery in progress */}
-        {activeOrder && (
-          <View style={styles.activeOrderHUDContainer}>
-            <ActiveOrderPanel
-              order={activeOrder}
-              onAdvanceOrderStep={advanceActiveOrderStep}
-              onCompleteDelivery={completeActiveOrder}
-              onCancelOrder={rejectIncomingOrder}
-            />
+          <View style={styles.orderActionsRow}>
+            <TouchableOpacity
+              style={styles.pauseBtn}
+              onPress={() => Alert.alert('Pausar', 'Envío pausado temporalmente.')}
+            >
+              <Text style={styles.pauseBtnText}>Pausar</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.acceptBtn, acceptedPriority && styles.acceptBtnDisabled]}
+              onPress={handleAcceptPriority}
+              activeOpacity={0.85}
+              disabled={acceptedPriority}
+            >
+              <Text style={styles.acceptBtnText}>
+                {acceptedPriority ? 'Asignado a tu Eco-Bike' : 'Aceptar Envío Sereno'}
+              </Text>
+              <Ionicons name="arrow-forward" size={14} color="#FFFFFF" />
+            </TouchableOpacity>
           </View>
-        )}
-      </View>
+        </View>
 
-      {/* Store Details Sheet */}
-      <StoreDetailSheet
-        store={selectedStore}
-        visible={!!selectedStore}
-        onClose={() => setSelectedStore(null)}
-        onRequestOrderFromStore={handleRequestOrderFromStore}
-      />
+        {/* Card 2: Kit Spa Bienestar */}
+        <View style={styles.orderCard}>
+          <View style={styles.orderCardHeader}>
+            <Text style={styles.normalTag}>KIT SPA BIENESTAR</Text>
+            <Text style={styles.timeAgo}>Hace 3 min</Text>
+          </View>
 
-      {/* Coworker Details Sheet */}
-      <CoworkerDetailSheet
-        coworker={selectedCoworker}
-        visible={!!selectedCoworker}
-        onClose={() => setSelectedCoworker(null)}
-        onOpenRadioWithCoworker={() => setIsRadioOpen(true)}
-      />
+          <Text style={styles.orderRouteTitle}>Boutique Providencia → Condesa</Text>
+          <Text style={styles.orderDetailSub}>Kit Baño de Inmersión (3.1 kg)</Text>
 
-      {/* Incoming Order Alert Modal */}
-      <IncomingOrderModal
-        order={incomingOrder}
-        visible={!!incomingOrder}
-        onAccept={acceptIncomingOrder}
-        onReject={rejectIncomingOrder}
-      />
+          <View style={styles.orderMetricsRow}>
+            <Text style={styles.orderPriceNormal}>$115.00 MXN</Text>
+            <Text style={styles.distanceNormal}>4.5 km • 26 min</Text>
+            <TouchableOpacity
+              style={styles.reviewBtn}
+              onPress={() => Alert.alert('Revisar', 'Boutique Providencia → Condesa ($115.00 MXN)')}
+            >
+              <Text style={styles.reviewBtnText}>Revisar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
 
-      {/* Delivery Success Celebration Modal */}
-      <DeliverySuccessModal
-        order={completedOrder}
-        visible={!!completedOrder}
-        onDismiss={dismissCompletedOrder}
-      />
+        {/* Card 3: Insumos Botánicos */}
+        <View style={styles.orderCard}>
+          <View style={styles.orderCardHeader}>
+            <Text style={styles.normalTag}>INSUMOS BOTÁNICOS</Text>
+            <Text style={styles.timeAgo}>Hace 6 min</Text>
+          </View>
 
-      {/* Courier Community Radio Modal */}
-      <CoworkerRadioModal
-        visible={isRadioOpen}
-        messages={communityMessages}
-        coworkers={coworkers}
-        onClose={() => setIsRadioOpen(false)}
-        onSendMessage={sendCommunityMessage}
-      />
+          <Text style={styles.orderRouteTitle}>Santuario Financiero → Juárez</Text>
+          <Text style={styles.orderDetailSub}>Infusiones y Ceras de Soja (0.8 kg)</Text>
+
+          <View style={styles.orderMetricsRow}>
+            <Text style={styles.orderPriceNormal}>$68.00 MXN</Text>
+            <Text style={styles.distanceNormal}>2.1 km • 12 min</Text>
+            <TouchableOpacity
+              style={styles.reviewBtn}
+              onPress={() => Alert.alert('Revisar', 'Santuario Financiero → Juárez ($68.00 MXN)')}
+            >
+              <Text style={styles.reviewBtnText}>Revisar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Guía de Entrega Consciente matching Page 11 */}
+        <View style={styles.guideCard}>
+          <View style={styles.guideHeader}>
+            <Ionicons name="shield-checkmark-outline" size={20} color={AURA_THEME.colors.forestDark} />
+            <Text style={styles.guideTitle}>Guía de Entrega Consciente</Text>
+          </View>
+
+          <View style={styles.guideItem}>
+            <View style={styles.guideDot} />
+            <Text style={styles.guideItemText}>
+              Mantén la caja térmica siempre a 21°C para preservar las propiedades de los aceites prensados en frío.
+            </Text>
+          </View>
+
+          <View style={styles.guideItem}>
+            <View style={styles.guideDot} />
+            <Text style={styles.guideItemText}>
+              Evita frenados bruscos con los ungüentos de cera de abeja y sérums florales en envase ámbar.
+            </Text>
+          </View>
+
+          <View style={styles.guideItem}>
+            <View style={styles.guideDot} />
+            <Text style={styles.guideItemText}>
+              Al entregar en el domicilio, saluda en tono sereno y ofrece la tarjeta de aromaterapia personalizada.
+            </Text>
+          </View>
+        </View>
+      </ScrollView>
     </View>
   );
 };
@@ -210,99 +206,304 @@ export const DriverRadarScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: AURA_THEME.colors.bgPrimary,
   },
-  dispatchStatusBar: {
-    backgroundColor: '#FFFFFF',
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+  kpiRow: {
     flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  kpiCard: {
+    flex: 1,
+    backgroundColor: AURA_THEME.colors.surface,
+    borderRadius: AURA_THEME.borderRadius.md,
+    padding: 10,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderLight,
   },
-  dispatchModePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
-    gap: 6,
-  },
-  modeManual: {
-    backgroundColor: '#E3F2FD',
-  },
-  modeAuto: {
-    backgroundColor: '#FFF3E0',
-  },
-  dispatchModeText: {
-    fontSize: 11,
+  kpiLabel: {
+    fontSize: 9,
     fontWeight: '800',
+    color: AURA_THEME.colors.textMuted,
+    letterSpacing: 0.5,
+    marginBottom: 4,
   },
-  textManual: {
-    color: '#1565C0',
+  kpiValue: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
   },
-  textAuto: {
-    color: '#E65100',
+  kpiSubText: {
+    fontSize: 9,
+    color: AURA_THEME.colors.textMuted,
   },
-  radarStatusPill: {
+  demandBanner: {
+    backgroundColor: '#FAF5EE',
+    borderRadius: AURA_THEME.borderRadius.lg,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E8DCB8',
+    marginBottom: 16,
+  },
+  demandBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-    gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: AURA_THEME.colors.terracotta,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
+    gap: 4,
+    marginBottom: 6,
   },
-  gpsDotLive: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#00C853',
+  demandBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.8,
   },
-  radarStatusText: {
+  demandTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
+    marginBottom: 2,
+  },
+  demandDesc: {
+    fontSize: 11.5,
+    color: '#675E4F',
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  sectionTitle: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
+  },
+  availableBadge: {
+    backgroundColor: AURA_THEME.colors.sageBadge,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: AURA_THEME.borderRadius.full,
+  },
+  availableBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: AURA_THEME.colors.forestDark,
+  },
+  orderCard: {
+    backgroundColor: AURA_THEME.colors.surface,
+    borderRadius: AURA_THEME.borderRadius.xl,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderLight,
+    marginBottom: 12,
+  },
+  orderCardPriority: {
+    borderWidth: 1.5,
+    borderColor: AURA_THEME.colors.terracottaBadge,
+    backgroundColor: '#FFFAF8',
+  },
+  orderCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  priorityPill: {
+    backgroundColor: AURA_THEME.colors.terracotta,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  priorityPillText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  timerCountdown: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#616161',
+    color: AURA_THEME.colors.terracotta,
   },
-  mapWrapper: {
+  normalTag: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestMedium,
+    letterSpacing: 0.5,
+  },
+  timeAgo: {
+    fontSize: 10.5,
+    color: AURA_THEME.colors.textMuted,
+  },
+  orderRouteTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
+    marginBottom: 2,
+  },
+  orderDestination: {
+    fontSize: 12,
+    color: AURA_THEME.colors.textSecondary,
+    marginBottom: 10,
+  },
+  orderDetailSub: {
+    fontSize: 11.5,
+    color: AURA_THEME.colors.textMuted,
+    marginBottom: 10,
+  },
+  orderMetricsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: AURA_THEME.colors.surfaceSubtle,
+    borderRadius: AURA_THEME.borderRadius.md,
+    padding: 10,
+    marginBottom: 10,
+    justifyContent: 'space-between',
+  },
+  orderPriceHighlight: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
+  },
+  orderTipIncluded: {
+    fontSize: 10,
+    color: AURA_THEME.colors.statusGreen,
+    fontWeight: '600',
+  },
+  metaDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: AURA_THEME.colors.borderLight,
+  },
+  metaVal: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: AURA_THEME.colors.forestDark,
+    textAlign: 'center',
+  },
+  metaLabel: {
+    fontSize: 9.5,
+    color: AURA_THEME.colors.textMuted,
+    textAlign: 'center',
+  },
+  orderPriceNormal: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
+  },
+  distanceNormal: {
+    fontSize: 11.5,
+    color: AURA_THEME.colors.textSecondary,
+  },
+  reviewBtn: {
+    backgroundColor: AURA_THEME.colors.forestDark,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: AURA_THEME.borderRadius.sm,
+  },
+  reviewBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  fragileNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FBECE5',
+    borderRadius: AURA_THEME.borderRadius.sm,
+    padding: 8,
+    gap: 6,
+    marginBottom: 12,
+  },
+  fragileText: {
     flex: 1,
-    position: 'relative',
+    fontSize: 10.5,
+    color: '#76422F',
+    lineHeight: 14,
   },
-  manualWaitOverlay: {
-    position: 'absolute',
-    top: 14,
-    left: 16,
-    right: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.94)',
-    borderRadius: 14,
+  orderActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  pauseBtn: {
     paddingHorizontal: 14,
     paddingVertical: 10,
+    borderRadius: AURA_THEME.borderRadius.md,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderMedium,
+    backgroundColor: AURA_THEME.colors.surface,
+  },
+  pauseBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: AURA_THEME.colors.textSecondary,
+  },
+  acceptBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: AURA_THEME.colors.terracotta,
+    paddingVertical: 10,
+    borderRadius: AURA_THEME.borderRadius.md,
+    gap: 6,
+  },
+  acceptBtnDisabled: {
+    backgroundColor: AURA_THEME.colors.forestDark,
+  },
+  acceptBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  guideCard: {
+    backgroundColor: '#F3F7F4',
+    borderRadius: AURA_THEME.borderRadius.lg,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderLight,
+    marginTop: 6,
+  },
+  guideHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    borderWidth: 1,
-    borderColor: '#BBDEFB',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    zIndex: 900,
+    marginBottom: 10,
   },
-  manualWaitText: {
+  guideTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: AURA_THEME.colors.forestDark,
+  },
+  guideItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginBottom: 8,
+  },
+  guideDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: AURA_THEME.colors.forestMedium,
+    marginTop: 5,
+  },
+  guideItemText: {
     flex: 1,
     fontSize: 11,
-    fontWeight: '600',
-    color: '#1565C0',
+    color: AURA_THEME.colors.textSecondary,
     lineHeight: 15,
-  },
-  activeOrderHUDContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    zIndex: 1000,
   },
 });

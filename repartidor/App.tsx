@@ -1,16 +1,28 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Modal, TextInput } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { AppProvider, useApp } from './src/context/AppContext';
 import { DriverRadarScreen } from './src/screens/DriverRadarScreen';
 import { OrdersHistoryScreen } from './src/screens/OrdersHistoryScreen';
 import { WalletScreen } from './src/screens/WalletScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { DriverTabBar, TabKey } from './src/components/Navigation/DriverTabBar';
+import { AURA_THEME } from '../src/theme/auraTheme';
 
-function RepartidorMain() {
+export interface RepartidorAppProps {
+  onLogout?: () => void;
+  currentUser?: {
+    id?: string;
+    name?: string;
+    email?: string;
+    role?: string;
+  } | null;
+  [key: string]: any;
+}
+
+function RepartidorMain({ onLogout, currentUser }: RepartidorAppProps) {
   const { allOrders, serverConnected, serverOnlineNotice, dismissServerOnlineNotice } = useApp();
   const [activeTab, setActiveTab] = useState<TabKey>('radar');
 
@@ -22,41 +34,74 @@ function RepartidorMain() {
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <StatusBar style="dark" />
 
-      {/* Top Bar with Fixed Server Status Indicator */}
-      <View style={styles.serverBar}>
-        <View style={styles.brandRow}>
-          <Text style={styles.appTitle}>SOY FHS</Text>
-          <View style={styles.repartidorTag}>
-            <Text style={styles.repartidorTagText}>REPARTIDOR</Text>
+      {/* Top Bar matching estilo.pdf Page 11 & 3 */}
+      <View style={styles.topBar}>
+        <View style={styles.topBarMain}>
+          <View style={styles.brandRow}>
+            <View style={styles.bikeIconCircle}>
+              <Ionicons name="bicycle" size={17} color={AURA_THEME.colors.forestDark} />
+            </View>
+            <View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={styles.brandTitle}>AURA COURIER PRO</Text>
+                <View style={styles.onlineBadge}>
+                  <View style={styles.onlineDot} />
+                  <Text style={styles.onlineBadgeText}>EN LÍNEA</Text>
+                </View>
+              </View>
+              <Text style={styles.vehicleSub}>
+                Eco-Bike #08 Activo · 84% carga botánica
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.rightActionsRow}>
+            {currentUser && (
+              <View style={styles.lotoBadge}>
+                <Ionicons name="star" size={11} color={AURA_THEME.colors.star} />
+                <Text style={styles.lotoBadgeText}>Loto Oro</Text>
+              </View>
+            )}
+
+            {onLogout && (
+              <TouchableOpacity
+                style={styles.logoutBtn}
+                onPress={onLogout}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="log-out-outline" size={14} color={AURA_THEME.colors.terracotta} />
+                <Text style={styles.logoutBtnText}>Salir</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
-        {/* Indicador no modificable de estado del servidor */}
-        <View style={[styles.connectionPill, serverConnected ? styles.pillOnline : styles.pillOffline]}>
-          <View style={[styles.dot, serverConnected ? styles.dotOnline : styles.dotOffline]} />
-          <Text style={[styles.connectionText, serverConnected ? styles.textOnline : styles.textOffline]}>
-            {serverConnected ? 'Servidor en Línea' : 'Servidor Desconectado'}
+        {/* Ambient notice */}
+        <View style={styles.subNoticeBar}>
+          <MaterialCommunityIcons name="leaf" size={12} color={AURA_THEME.colors.forestDark} />
+          <Text style={styles.subNoticeText}>
+            Rutas Verdes & Tráfico Suave • Baúl térmico a 21.2°C (Óptimo)
           </Text>
         </View>
       </View>
 
-      {/* Aviso de Servidor en Línea */}
+      {/* Notice Banner if server came online */}
       {serverOnlineNotice && (
         <View style={styles.serverNoticeBanner}>
-          <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
+          <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />
           <Text style={styles.serverNoticeText}>{serverOnlineNotice}</Text>
           <TouchableOpacity onPress={dismissServerOnlineNotice} style={styles.dismissNoticeBtn}>
-            <Ionicons name="close" size={16} color="#FFFFFF" />
+            <Ionicons name="close" size={14} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
       )}
 
-      {/* Screens */}
+      {/* Screen Views */}
       <View style={styles.screenContainer}>
         {activeTab === 'radar' && <DriverRadarScreen />}
         {activeTab === 'pedidos' && <OrdersHistoryScreen />}
         {activeTab === 'billetera' && <WalletScreen />}
-        {activeTab === 'perfil' && <ProfileScreen />}
+        {activeTab === 'perfil' && <ProfileScreen onLogout={onLogout} currentUser={currentUser} />}
       </View>
 
       {/* Bottom Tabs */}
@@ -69,11 +114,11 @@ function RepartidorMain() {
   );
 }
 
-export default function App() {
+export default function App({ onLogout, currentUser }: RepartidorAppProps = {}) {
   return (
     <SafeAreaProvider>
       <AppProvider>
-        <RepartidorMain />
+        <RepartidorMain onLogout={onLogout} currentUser={currentUser} />
       </AppProvider>
     </SafeAreaProvider>
   );
@@ -82,119 +127,131 @@ export default function App() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: AURA_THEME.colors.bgPrimary,
   },
-  serverBar: {
+  topBar: {
+    backgroundColor: AURA_THEME.colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: AURA_THEME.colors.borderLight,
+    paddingTop: 8,
+    paddingBottom: 6,
+    paddingHorizontal: 16,
+  },
+  topBarMain: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    marginBottom: 6,
   },
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
-  appTitle: {
+  bikeIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: AURA_THEME.colors.sageBadge,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  brandTitle: {
     fontSize: 15,
-    fontWeight: '900',
-    color: '#FF441F',
-    letterSpacing: 0.5,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
+    letterSpacing: 0.8,
   },
-  repartidorTag: {
-    backgroundColor: '#FFF0ED',
+  onlineBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: AURA_THEME.colors.statusGreenBg,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
   },
-  repartidorTagText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#FF441F',
-  },
-  connectionPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 5,
-  },
-  pillOnline: {
-    backgroundColor: '#E8F5E9',
-  },
-  pillOffline: {
-    backgroundColor: '#FFF8E1',
-  },
-  dot: {
+  onlineDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
+    backgroundColor: AURA_THEME.colors.statusGreen,
   },
-  dotOnline: {
-    backgroundColor: '#00C853',
-  },
-  dotOffline: {
-    backgroundColor: '#FF9100',
-  },
-  connectionText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  textOnline: {
-    color: '#2E7D32',
-  },
-  textOffline: {
-    color: '#F57F17',
-  },
-  screenContainer: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  configCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 20,
-    width: '100%',
-    maxWidth: 420,
-  },
-  configTitle: {
-    fontSize: 16,
+  onlineBadgeText: {
+    fontSize: 9,
     fontWeight: '800',
-    color: '#1A1D20',
+    color: AURA_THEME.colors.statusGreen,
   },
-  configSubtitle: {
-    fontSize: 12,
-    color: '#757575',
-    marginVertical: 8,
-    lineHeight: 17,
+  vehicleSub: {
+    fontSize: 10.5,
+    color: AURA_THEME.colors.textSecondary,
+    marginTop: 1,
   },
-  serverNoticeBanner: {
-    backgroundColor: '#00C853',
+  rightActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    gap: 8,
+  },
+  lotoBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: AURA_THEME.borderRadius.full,
+    gap: 4,
+  },
+  lotoBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: AURA_THEME.colors.terracottaSoft,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: AURA_THEME.borderRadius.full,
+    gap: 3,
+  },
+  logoutBtnText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: AURA_THEME.colors.terracotta,
+  },
+  subNoticeBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: AURA_THEME.colors.sageBadge,
+    borderRadius: AURA_THEME.borderRadius.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    gap: 5,
+  },
+  subNoticeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: AURA_THEME.colors.forestDark,
+  },
+  serverNoticeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: AURA_THEME.colors.statusGreen,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     gap: 8,
   },
   serverNoticeText: {
     flex: 1,
+    fontSize: 11,
     color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '600',
   },
   dismissNoticeBtn: {
     padding: 4,
+  },
+  screenContainer: {
+    flex: 1,
   },
 });

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { AURA_THEME } from '../../../../src/theme/auraTheme';
 
 export type TabKey = 'radar' | 'pedidos' | 'billetera' | 'perfil';
 
@@ -18,45 +19,45 @@ export const DriverTabBar: React.FC<DriverTabBarProps> = ({
   const tabs = [
     {
       key: 'radar' as TabKey,
-      label: 'Radar & Mapa',
+      label: 'Rutas',
       renderIcon: (active: boolean) => (
-        <MaterialCommunityIcons
-          name="radar"
-          size={24}
-          color={active ? '#FF441F' : '#9E9E9E'}
+        <Ionicons
+          name={active ? 'bicycle' : 'bicycle-outline'}
+          size={22}
+          color={active ? AURA_THEME.colors.forestDark : AURA_THEME.colors.textMuted}
         />
       ),
     },
     {
       key: 'pedidos' as TabKey,
-      label: 'Entregas',
+      label: 'Navegación',
       renderIcon: (active: boolean) => (
         <Ionicons
-          name={active ? 'receipt' : 'receipt-outline'}
+          name={active ? 'navigate' : 'navigate-outline'}
           size={22}
-          color={active ? '#FF441F' : '#9E9E9E'}
+          color={active ? AURA_THEME.colors.forestDark : AURA_THEME.colors.textMuted}
         />
       ),
     },
     {
       key: 'billetera' as TabKey,
-      label: 'Billetera',
+      label: 'Ganancias',
       renderIcon: (active: boolean) => (
         <Ionicons
           name={active ? 'wallet' : 'wallet-outline'}
           size={22}
-          color={active ? '#FF441F' : '#9E9E9E'}
+          color={active ? AURA_THEME.colors.forestDark : AURA_THEME.colors.textMuted}
         />
       ),
     },
     {
       key: 'perfil' as TabKey,
-      label: 'Mi Cuenta',
+      label: 'Perfil',
       renderIcon: (active: boolean) => (
         <Ionicons
           name={active ? 'person' : 'person-outline'}
           size={22}
-          color={active ? '#FF441F' : '#9E9E9E'}
+          color={active ? AURA_THEME.colors.forestDark : AURA_THEME.colors.textMuted}
         />
       ),
     },
@@ -92,49 +93,48 @@ export const DriverTabBar: React.FC<DriverTabBarProps> = ({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 10,
+    backgroundColor: AURA_THEME.colors.surface,
+    paddingVertical: 8,
+    paddingBottom: 14,
     borderTopWidth: 1,
-    borderTopColor: '#EEEEEE',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 4,
+    borderTopColor: AURA_THEME.colors.borderLight,
   },
   tabItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 3,
   },
   iconWrapper: {
     position: 'relative',
+    height: 26,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   badge: {
     position: 'absolute',
     top: -4,
-    right: -8,
-    backgroundColor: '#FF441F',
+    right: -10,
+    backgroundColor: AURA_THEME.colors.terracotta,
     borderRadius: 8,
     minWidth: 16,
     height: 16,
-    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 3,
+    alignItems: 'center',
+    paddingHorizontal: 4,
   },
   badgeText: {
     color: '#FFFFFF',
-    fontSize: 9,
+    fontSize: 9.5,
     fontWeight: '800',
   },
   label: {
     fontSize: 11,
+    color: AURA_THEME.colors.textMuted,
     fontWeight: '600',
-    color: '#9E9E9E',
+    marginTop: 2,
   },
   labelActive: {
-    color: '#FF441F',
+    color: AURA_THEME.colors.forestDark,
     fontWeight: '800',
   },
 });

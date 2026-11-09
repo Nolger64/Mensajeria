@@ -1,137 +1,99 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { DriverProfile } from '../types';
-
-import { useApp } from '../context/AppContext';
+import { AURA_THEME } from '../../../src/theme/auraTheme';
 
 interface ProfileScreenProps {
-  driver?: DriverProfile;
+  onLogout?: () => void;
+  currentUser?: any;
 }
 
-export const ProfileScreen: React.FC<ProfileScreenProps> = ({ driver: propDriver }) => {
-  const { driver: contextDriver } = useApp();
-  const driver = propDriver || contextDriver;
+export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout, currentUser }) => {
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Perfil de Repartidor</Text>
-        <Text style={styles.subtitle}>ID Oficial Soy FHS: #DRV-99824</Text>
-      </View>
-
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Profile Card */}
         <View style={styles.profileCard}>
           <View style={styles.avatarBig}>
-            <Text style={styles.avatarBigEmoji}>🛵</Text>
+            <MaterialCommunityIcons name="spa" size={32} color={AURA_THEME.colors.forestDark} />
           </View>
-          <Text style={styles.profileName}>{driver.name}</Text>
-          <Text style={styles.profileAlias}>"{driver.alias}"</Text>
+          <Text style={styles.profileName}>{currentUser?.name || 'Mateo Silva'}</Text>
+          <Text style={styles.profileRole}>Embajador Eco-Aura Spa • Eco-Bike #08</Text>
 
           <View style={styles.levelBadge}>
-            <Ionicons name="sparkles" size={14} color="#FFB300" />
-            <Text style={styles.levelBadgeText}>{driver.level}</Text>
+            <Ionicons name="star" size={13} color="#92400E" />
+            <Text style={styles.levelBadgeText}>Nivel Loto Oro · Certificado</Text>
           </View>
 
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <View style={styles.rowCenter}>
-                <Ionicons name="star" size={16} color="#FFB300" />
-                <Text style={styles.statValue}>{driver.rating}</Text>
+                <Ionicons name="star" size={14} color={AURA_THEME.colors.star} />
+                <Text style={styles.statValue}>4.98</Text>
               </View>
-              <Text style={styles.statLabel}>842 Calificaciones</Text>
+              <Text style={styles.statLabel}>142 Rituales</Text>
             </View>
 
             <View style={styles.divider} />
 
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{driver.acceptanceRate}%</Text>
-              <Text style={styles.statLabel}>Tasa Aceptación</Text>
+              <Text style={styles.statValue}>99.4%</Text>
+              <Text style={styles.statLabel}>Puntualidad</Text>
             </View>
 
             <View style={styles.divider} />
 
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{driver.onTimeRate}%</Text>
-              <Text style={styles.statLabel}>A Tiempo</Text>
+              <Text style={[styles.statValue, { color: AURA_THEME.colors.statusGreen }]}>0g</Text>
+              <Text style={styles.statLabel}>CO₂ Emitido</Text>
             </View>
           </View>
         </View>
 
-        {/* Vehicle Information */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Vehículo Registrado</Text>
-          <View style={styles.vehicleRow}>
-            <View style={styles.vehicleIcon}>
-              <MaterialCommunityIcons name="motorbike" size={24} color="#FF441F" />
+        {/* Vehicle & Equipment */}
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionHeader}>Equipamiento Asignado</Text>
+          <View style={styles.infoRow}>
+            <Ionicons name="bicycle" size={18} color={AURA_THEME.colors.forestDark} />
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={styles.infoTitle}>Bicicleta Eléctrica Aura #08</Text>
+              <Text style={styles.infoSub}>Batería: 84% de carga · Autonomía 38 km</Text>
             </View>
-            <View style={styles.vehicleDetails}>
-              <Text style={styles.vehicleModel}>{driver.vehicleModel}</Text>
-              <Text style={styles.vehiclePlate}>Placa: {driver.plate} • Cilindraje 155cc</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Ionicons name="thermometer-outline" size={18} color={AURA_THEME.colors.forestDark} />
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={styles.infoTitle}>Cofre Térmico Presurizado</Text>
+              <Text style={styles.infoSub}>Temperatura interna estable: 21.2°C (Óptimo)</Text>
             </View>
-            <View style={styles.activePill}>
-              <Text style={styles.activePillText}>Activo</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Ionicons name="ribbon-outline" size={18} color={AURA_THEME.colors.forestDark} />
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={styles.infoTitle}>Acreditación en Aromaterapia</Text>
+              <Text style={styles.infoSub}>Manejo de elixires y protocolo de silencio</Text>
             </View>
           </View>
         </View>
 
-        {/* Verifications & Compliance */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Verificaciones y Seguridad</Text>
-
-          <View style={styles.checkItem}>
-            <Ionicons name="shield-checkmark" size={20} color="#00C853" />
-            <View style={styles.checkInfo}>
-              <Text style={styles.checkTitle}>Mochila Térmica Oficial</Text>
-              <Text style={styles.checkSubtitle}>Inspeccionada y validada por FHS Hub</Text>
-            </View>
-            <Text style={styles.approvedText}>APROBADA</Text>
-          </View>
-
-          <View style={styles.checkItem}>
-            <Ionicons name="document-text" size={20} color="#00C853" />
-            <View style={styles.checkInfo}>
-              <Text style={styles.checkTitle}>SOAT Vigente</Text>
-              <Text style={styles.checkSubtitle}>Póliza Seguros del Estado - Vigente</Text>
-            </View>
-            <Text style={styles.approvedText}>VIGENTE</Text>
-          </View>
-
-          <View style={styles.checkItem}>
-            <Ionicons name="card" size={20} color="#00C853" />
-            <View style={styles.checkInfo}>
-              <Text style={styles.checkTitle}>Licencia de Conducción</Text>
-              <Text style={styles.checkSubtitle}>Categoría A2 (Motos)</Text>
-            </View>
-            <Text style={styles.approvedText}>ACTIVA</Text>
+        {/* Environmental impact */}
+        <View style={styles.ecoCard}>
+          <MaterialCommunityIcons name="leaf" size={24} color={AURA_THEME.colors.forestDark} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.ecoTitle}>Compromiso Cero Emisiones</Text>
+            <Text style={styles.ecoDesc}>
+              Has evitado 42.8 kg de CO₂ este mes transportando fórmulas en trayectos sostenibles y recuperando 48 frascos de vidrio para economía circular.
+            </Text>
           </View>
         </View>
 
-        {/* Support & SOS */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Asistencia y Soporte</Text>
-
-          <TouchableOpacity
-            style={styles.supportButton}
-            onPress={() => Alert.alert('Soporte FHS Repartidores', 'Conectando con un asesor de soporte prioritario 24/7...')}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="headset-outline" size={20} color="#1A1D20" />
-            <Text style={styles.supportButtonText}>Chat con Soporte en Vivo 24/7</Text>
+        {/* Logout action */}
+        {onLogout && (
+          <TouchableOpacity style={styles.logoutFullBtn} onPress={onLogout} activeOpacity={0.8}>
+            <Ionicons name="log-out-outline" size={18} color={AURA_THEME.colors.terracotta} />
+            <Text style={styles.logoutFullBtnText}>Cerrar Sesión del Embajador</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.sosButton}
-            onPress={() => Alert.alert('Línea de Emergencia SOS', '¿Deseas llamar a la central de emergencias viales de FHS?', [
-              { text: 'Cancelar', style: 'cancel' },
-              { text: 'Llamar SOS', style: 'destructive', onPress: () => {} },
-            ])}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="alert-circle" size={20} color="#D32F2F" />
-            <Text style={styles.sosButtonText}>Botón de Emergencia / Asistencia Vial</Text>
-          </TouchableOpacity>
-        </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -140,87 +102,66 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ driver: propDriver
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
-  header: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#1A1D20',
-  },
-  subtitle: {
-    fontSize: 12,
-    color: '#757575',
-    marginTop: 2,
+    backgroundColor: AURA_THEME.colors.bgPrimary,
   },
   content: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 16,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 40,
   },
   profileCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 22,
+    backgroundColor: AURA_THEME.colors.surface,
+    borderRadius: AURA_THEME.borderRadius.xl,
     padding: 20,
     alignItems: 'center',
-    marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#EEEEEE',
+    borderColor: AURA_THEME.colors.borderLight,
+    marginBottom: 14,
   },
   avatarBig: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#FFE9E4',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: AURA_THEME.colors.sageBadge,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2.5,
-    borderColor: '#FF441F',
     marginBottom: 10,
-  },
-  avatarBigEmoji: {
-    fontSize: 34,
   },
   profileName: {
     fontSize: 18,
-    fontWeight: '900',
-    color: '#1A1D20',
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
+    marginBottom: 2,
   },
-  profileAlias: {
-    fontSize: 13,
-    color: '#757575',
-    marginTop: 1,
+  profileRole: {
+    fontSize: 12,
+    color: AURA_THEME.colors.textSecondary,
+    marginBottom: 10,
   },
   levelBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF8E1',
+    backgroundColor: '#FEF3C7',
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 12,
-    gap: 5,
-    marginTop: 8,
+    borderRadius: AURA_THEME.borderRadius.full,
+    gap: 4,
+    marginBottom: 16,
   },
   levelBadgeText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#F57F17',
+    color: '#92400E',
   },
   statsRow: {
     flexDirection: 'row',
-    width: '100%',
-    marginTop: 16,
-    paddingTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: '#F5F5F5',
     alignItems: 'center',
+    width: '100%',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: AURA_THEME.colors.borderLight,
   },
   statItem: {
     flex: 1,
@@ -229,129 +170,87 @@ const styles = StyleSheet.create({
   rowCenter: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 3,
   },
   statValue: {
     fontSize: 15,
-    fontWeight: '900',
-    color: '#1A1D20',
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
   },
   statLabel: {
     fontSize: 10,
-    color: '#757575',
+    color: AURA_THEME.colors.textMuted,
     marginTop: 2,
   },
   divider: {
     width: 1,
-    height: 24,
-    backgroundColor: '#E0E0E0',
+    height: 28,
+    backgroundColor: AURA_THEME.colors.borderLight,
   },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+  sectionCard: {
+    backgroundColor: AURA_THEME.colors.surface,
+    borderRadius: AURA_THEME.borderRadius.xl,
     padding: 16,
-    marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#EEEEEE',
+    borderColor: AURA_THEME.colors.borderLight,
+    marginBottom: 14,
   },
-  cardTitle: {
-    fontSize: 13,
+  sectionHeader: {
+    fontSize: 13.5,
     fontWeight: '800',
-    color: '#424242',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    color: AURA_THEME.colors.forestDark,
     marginBottom: 12,
   },
-  vehicleRow: {
+  infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-  },
-  vehicleIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#FFF0ED',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  vehicleDetails: {
-    flex: 1,
-  },
-  vehicleModel: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#1A1D20',
-  },
-  vehiclePlate: {
-    fontSize: 12,
-    color: '#757575',
-    marginTop: 2,
-  },
-  activePill: {
-    backgroundColor: '#E8F5E9',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  activePillText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#2E7D32',
-  },
-  checkItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#F5F5F5',
+    borderBottomColor: AURA_THEME.colors.borderLight,
   },
-  checkInfo: {
-    flex: 1,
-  },
-  checkTitle: {
-    fontSize: 13,
+  infoTitle: {
+    fontSize: 12.5,
     fontWeight: '700',
-    color: '#1A1D20',
+    color: AURA_THEME.colors.forestDark,
   },
-  checkSubtitle: {
+  infoSub: {
+    fontSize: 10.5,
+    color: AURA_THEME.colors.textMuted,
+  },
+  ecoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EAF4EC',
+    borderRadius: AURA_THEME.borderRadius.lg,
+    padding: 14,
+    gap: 12,
+    marginBottom: 16,
+  },
+  ecoTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
+    marginBottom: 2,
+  },
+  ecoDesc: {
     fontSize: 11,
-    color: '#757575',
-    marginTop: 1,
+    color: AURA_THEME.colors.textSecondary,
+    lineHeight: 15,
   },
-  approvedText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#00C853',
-  },
-  supportButton: {
+  logoutFullBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F5F5F5',
+    backgroundColor: AURA_THEME.colors.terracottaSoft,
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: AURA_THEME.borderRadius.md,
     gap: 8,
-    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.terracottaBadge,
   },
-  supportButtonText: {
+  logoutFullBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#1A1D20',
-  },
-  sosButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFEBEE',
-    paddingVertical: 12,
-    borderRadius: 12,
-    gap: 8,
-  },
-  sosButtonText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#D32F2F',
+    color: AURA_THEME.colors.terracotta,
   },
 });

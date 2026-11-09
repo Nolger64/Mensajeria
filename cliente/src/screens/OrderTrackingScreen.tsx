@@ -5,308 +5,207 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
+  Alert,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useClient } from '../context/ClientContext';
-import { OrderStep, DeliveryOrder } from '../types';
+import { AURA_THEME } from '../../../src/theme/auraTheme';
 
 interface OrderTrackingScreenProps {
   onGoToStores: () => void;
 }
 
-const STEP_LABELS: Record<OrderStep, { title: string; subtitle: string; color: string; icon: string }> = {
-  pendiente: {
-    title: 'Pedido Recibido',
-    subtitle: 'Esperando asignación de repartidor por la Torre de Control',
-    color: '#FFB300',
-    icon: 'hourglass',
-  },
-  ofertado: {
-    title: 'Buscando Repartidor...',
-    subtitle: 'Conectando con la flota activa en tu zona',
-    color: '#FFB300',
-    icon: 'search',
-  },
-  rumbo_tienda: {
-    title: 'Repartidor Asignado',
-    subtitle: 'El domiciliario va en camino al punto de recogida',
-    color: '#FF9100',
-    icon: 'bicycle',
-  },
-  en_tienda: {
-    title: 'En la Tienda',
-    subtitle: 'Verificando y empacando tu pedido con cuidado',
-    color: '#AB47BC',
-    icon: 'storefront',
-  },
-  rumbo_cliente: {
-    title: '¡En Camino a Tu Ubicación!',
-    subtitle: 'El repartidor está cerca de tu dirección',
-    color: '#2979FF',
-    icon: 'navigate',
-  },
-  entregado: {
-    title: '¡Pedido Entregado!',
-    subtitle: 'Gracias por pedir con FHS. ¡Que lo disfrutes!',
-    color: '#00E676',
-    icon: 'checkmark-circle',
-  },
-};
-
-const STEPS_ORDER: OrderStep[] = ['pendiente', 'ofertado', 'rumbo_tienda', 'en_tienda', 'rumbo_cliente', 'entregado'];
-
 export const OrderTrackingScreen: React.FC<OrderTrackingScreenProps> = ({
   onGoToStores,
 }) => {
-  const { orders, activeOrder, setActiveOrder, refreshOrders, workers, isServerConnected } = useClient();
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const { orders } = useClient();
+  const [currentStep, setCurrentStep] = useState<number>(3); // 1: Confirmado, 2: Empacado, 3: En Camino, 4: En Puerta
 
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    await refreshOrders();
-    setIsRefreshing(false);
-  };
-
-  if (!activeOrder && orders.length === 0) {
-    return (
-      <View style={styles.emptyContainer}>
-        <View style={styles.emptyIconCircle}>
-          <Ionicons name="receipt-outline" size={46} color="#FF441F" />
-        </View>
-        <Text style={styles.emptyTitle}>No tienes pedidos activos</Text>
-        <Text style={styles.emptySub}>
-          Cuando hagas un pedido en una tienda o solicites un domicilio express, podrás seguirlo en tiempo real aquí.
-        </Text>
-        <TouchableOpacity style={styles.exploreBtn} onPress={onGoToStores}>
-          <Text style={styles.exploreBtnText}>Explorar Tiendas</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  const currentOrder = activeOrder || orders[0];
-  const stepInfo = STEP_LABELS[currentOrder.status] || STEP_LABELS.ofertado;
-  const currentStepIndex = STEPS_ORDER.indexOf(currentOrder.status);
-
-  // Find assigned courier if available
-  const assignedCourier = currentOrder.assignedWorkerId
-    ? workers.find((w) => w.id === currentOrder.assignedWorkerId)
-    : workers.find((w) => w.status === 'en_ruta' || w.status === 'en_tienda') || workers[0];
+  const orderCode = orders.length > 0 ? orders[0].orderCode : '#AUR-8921';
+  const securityPin = orders.length > 0 && orders[0].securityPin ? orders[0].securityPin : '4921';
 
   return (
     <View style={styles.container}>
-      {/* Top Bar with Refresh */}
-      <View style={styles.topBar}>
-        <View>
-          <Text style={styles.topBarTitle}>Rastreo en Tiempo Real</Text>
-          <Text style={styles.topBarSub}>
-            {isServerConnected ? '🟢 Conectado a Servidor' : '🟠 Modo Local'}
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Status Highlight Banner */}
+        <View style={styles.statusBanner}>
+          <View style={styles.badgeRow}>
+            <View style={styles.enCaminoBadge}>
+              <Text style={styles.enCaminoBadgeText}>EN CAMINO</Text>
+            </View>
+            <View style={styles.co2Badge}>
+              <Ionicons name="leaf" size={11} color={AURA_THEME.colors.forestDark} />
+              <Text style={styles.co2BadgeText}>0% Huella de Carbono</Text>
+            </View>
+          </View>
+
+          <Text style={styles.statusTitle}>¡Tu ritual está en camino!</Text>
+          <Text style={styles.statusSubtitle}>
+            Entrega silenciosa y sostenible estimada en 14 min
+          </Text>
+
+          {/* Route Visual Diagram */}
+          <View style={styles.routeVisual}>
+            <View style={styles.routePoint}>
+              <View style={styles.pointCircle}>
+                <Ionicons name="business" size={14} color={AURA_THEME.colors.forestDark} />
+              </View>
+              <Text style={styles.pointLabel}>Sede Jardines</Text>
+            </View>
+
+            <View style={styles.routeLineActive}>
+              <View style={styles.bikeIconFloating}>
+                <Ionicons name="bicycle" size={16} color="#FFFFFF" />
+              </View>
+            </View>
+
+            <View style={styles.routePoint}>
+              <View style={[styles.pointCircle, styles.pointCircleDestination]}>
+                <Ionicons name="home" size={14} color={AURA_THEME.colors.terracotta} />
+              </View>
+              <Text style={styles.pointLabel}>Tu Santuario</Text>
+            </View>
+          </View>
+
+          <Text style={styles.routeThermalNote}>
+            Caja térmica sellada con cera vegetal a 21°C
           </Text>
         </View>
-        <TouchableOpacity
-          style={styles.refreshBtn}
-          onPress={handleRefresh}
-          disabled={isRefreshing}
-        >
-          {isRefreshing ? (
-            <ActivityIndicator size="small" color="#FFF" />
-          ) : (
-            <Ionicons name="reload" size={18} color="#FFF" />
-          )}
-        </TouchableOpacity>
-      </View>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-        {/* Main Status Tracker Card */}
-        <View style={styles.trackerCard}>
-          <View style={styles.orderCodeRow}>
-            <View>
-              <Text style={styles.orderCode}>{currentOrder.orderCode}</Text>
-              <Text style={styles.orderStoreName}>{currentOrder.store.name}</Text>
-            </View>
-            <View style={[styles.statusPill, { backgroundColor: `${stepInfo.color}22` }]}>
-              <Text style={[styles.statusPillText, { color: stepInfo.color }]}>
-                {currentOrder.status.toUpperCase()}
-              </Text>
-            </View>
+        {/* Preparation Steps 1-4 */}
+        <View style={styles.stepsCard}>
+          <View style={styles.stepsHeader}>
+            <Text style={styles.stepsTitle}>ETAPAS DE PREPARACIÓN</Text>
+            <Text style={styles.stepCounterText}>Paso {currentStep} de 4</Text>
           </View>
 
-          {/* Current Step Big Banner */}
-          <View style={[styles.currentStepBox, { borderColor: stepInfo.color }]}>
-            <Ionicons name={stepInfo.icon as any} size={28} color={stepInfo.color} />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.stepTitle, { color: stepInfo.color }]}>
-                {stepInfo.title}
-              </Text>
-              <Text style={styles.stepSubtitle}>{stepInfo.subtitle}</Text>
-            </View>
-          </View>
-
-          {/* 5-Step Progress Pipeline */}
-          <View style={styles.progressPipeline}>
-            {STEPS_ORDER.map((step, idx) => {
-              const isPast = idx < currentStepIndex;
-              const isCurrent = idx === currentStepIndex;
-              const stepConf = STEP_LABELS[step];
-
+          <View style={styles.stepsProgressRow}>
+            {[
+              { id: 1, label: 'Confirmado' },
+              { id: 2, label: 'Empacado' },
+              { id: 3, label: 'En Camino' },
+              { id: 4, label: 'En Puerta' },
+            ].map((st) => {
+              const isPast = st.id < currentStep;
+              const isCurrent = st.id === currentStep;
               return (
-                <View key={step} style={styles.stepPipelineItem}>
+                <TouchableOpacity
+                  key={st.id}
+                  style={styles.stepItem}
+                  onPress={() => setCurrentStep(st.id)}
+                  activeOpacity={0.8}
+                >
                   <View
                     style={[
-                      styles.pipelineNode,
-                      isPast && styles.nodePast,
-                      isCurrent && [styles.nodeCurrent, { backgroundColor: stepConf.color }],
+                      styles.stepCircle,
+                      isPast && styles.stepCirclePast,
+                      isCurrent && styles.stepCircleCurrent,
                     ]}
                   >
                     {isPast ? (
-                      <Ionicons name="checkmark" size={12} color="#FFF" />
+                      <Ionicons name="checkmark" size={12} color="#FFFFFF" />
                     ) : (
-                      <Text style={styles.nodeNumber}>{idx + 1}</Text>
+                      <Text
+                        style={[
+                          styles.stepNum,
+                          isCurrent && { color: '#FFFFFF', fontWeight: '800' },
+                        ]}
+                      >
+                        {st.id}
+                      </Text>
                     )}
                   </View>
-                  {idx < STEPS_ORDER.length - 1 && (
-                    <View
-                      style={[
-                        styles.pipelineLine,
-                        idx < currentStepIndex && styles.lineActive,
-                      ]}
-                    />
-                  )}
-                </View>
+                  <Text
+                    style={[
+                      styles.stepLabel,
+                      (isCurrent || isPast) && styles.stepLabelActive,
+                    ]}
+                  >
+                    {st.label}
+                  </Text>
+                </TouchableOpacity>
               );
             })}
           </View>
-          <View style={styles.pipelineLabels}>
-            <Text style={styles.pipeLabelText}>Ofertado</Text>
-            <Text style={styles.pipeLabelText}>Tienda</Text>
-            <Text style={styles.pipeLabelText}>Empacado</Text>
-            <Text style={styles.pipeLabelText}>En Ruta</Text>
-            <Text style={styles.pipeLabelText}>Entregado</Text>
-          </View>
 
-          {/* Security PIN Box */}
-          <View style={styles.pinCard}>
-            <View style={styles.pinIcon}>
-              <Ionicons name="key" size={20} color="#FFD54F" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.pinLabel}>PIN de Seguridad de Entrega</Text>
-              <Text style={styles.pinSub}>
-                Compártele este PIN a tu repartidor al momento de recibir el pedido:
-              </Text>
-            </View>
-            <View style={styles.pinBadge}>
-              <Text style={styles.pinCode}>{currentOrder.securityPin || '4821'}</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Assigned Courier Card */}
-        {assignedCourier && (
-          <View style={styles.courierCard}>
-            <Text style={styles.cardHeaderSmall}>Domiciliario Asignado</Text>
-            <View style={styles.courierRow}>
-              <View
-                style={[
-                  styles.courierAvatar,
-                  { backgroundColor: assignedCourier.avatarColor || '#2979FF' },
-                ]}
-              >
-                <Text style={{ fontSize: 24 }}>
-                  {assignedCourier.vehicle === 'moto' ? '🛵' : '🚲'}
-                </Text>
-              </View>
-
-              <View style={{ flex: 1 }}>
-                <Text style={styles.courierName}>{assignedCourier.name}</Text>
-                <Text style={styles.courierAlias}>
-                  "{assignedCourier.nickname}" • {assignedCourier.vehicleModel}
-                </Text>
-                <View style={styles.courierMeta}>
-                  <View style={styles.ratingBadge}>
-                    <Ionicons name="star" size={11} color="#FFB300" />
-                    <Text style={styles.ratingText}>{assignedCourier.rating.toFixed(2)}</Text>
-                  </View>
-                  <Text style={styles.dotSeparator}>•</Text>
-                  <Text style={styles.metaText}>
-                    {assignedCourier.completedOrdersToday} entregas hoy
-                  </Text>
-                  <Text style={styles.dotSeparator}>•</Text>
-                  <Text style={styles.metaText}>
-                    🔋 {assignedCourier.batteryLevel}%
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* Destination & Notes Card */}
-        <View style={styles.infoCard}>
-          <Text style={styles.cardHeaderSmall}>Detalles de Entrega</Text>
-          <View style={styles.infoRow}>
-            <Ionicons name="location" size={16} color="#FF441F" />
-            <Text style={styles.infoText}>{currentOrder.customerAddress}</Text>
-          </View>
-          {currentOrder.customerNotes ? (
-            <View style={[styles.infoRow, { marginTop: 6 }]}>
-              <Ionicons name="chatbubble-ellipses" size={16} color="#8C96A5" />
-              <Text style={styles.infoSubText}>"{currentOrder.customerNotes}"</Text>
-            </View>
-          ) : null}
-        </View>
-
-        {/* Items Summary Card */}
-        <View style={styles.infoCard}>
-          <Text style={styles.cardHeaderSmall}>Resumen de Artículos</Text>
-          {currentOrder.items.map((item, idx) => (
-            <View key={item.id || idx} style={styles.orderItemRow}>
-              <Text style={styles.orderItemQty}>{item.quantity}x</Text>
-              <Text style={styles.orderItemName} numberOfLines={1}>
-                {item.name}
-              </Text>
-              {item.price > 0 && (
-                <Text style={styles.orderItemPrice}>
-                  ${(item.price * item.quantity).toLocaleString('es-CO')}
-                </Text>
-              )}
-            </View>
-          ))}
-          <View style={styles.divider} />
-          <View style={styles.orderTotalRow}>
-            <Text style={styles.orderTotalLabel}>Total Cancelado</Text>
-            <Text style={styles.orderTotalVal}>
-              ${currentOrder.totalEarnings.toLocaleString('es-CO')} COP
+          <View style={styles.stepExplanationBox}>
+            <Ionicons name="information-circle-outline" size={16} color={AURA_THEME.colors.forestDark} />
+            <Text style={styles.stepExplanationText}>
+              Mateo circula por vialidades bajas en ruido para preservar las esencias florales intactas.
             </Text>
           </View>
         </View>
 
-        {/* Previous Orders Selector */}
-        {orders.length > 1 && (
-          <View style={styles.historyCard}>
-            <Text style={styles.cardHeaderSmall}>Otros Pedidos en Esta Sesión</Text>
-            {orders.map((ord) => (
-              <TouchableOpacity
-                key={ord.id}
-                style={[
-                  styles.historyItem,
-                  ord.id === currentOrder.id && styles.historyItemActive,
-                ]}
-                onPress={() => setActiveOrder(ord)}
-              >
-                <View>
-                  <Text style={styles.historyCode}>{ord.orderCode}</Text>
-                  <Text style={styles.historyStore}>{ord.store.name}</Text>
-                </View>
-                <View style={styles.historyRight}>
-                  <Text style={styles.historyStatus}>{ord.status}</Text>
-                  <Ionicons name="chevron-forward" size={14} color="#8C96A5" />
-                </View>
-              </TouchableOpacity>
-            ))}
+        {/* Courier Info Card */}
+        <View style={styles.courierCard}>
+          <View style={styles.courierAvatarBox}>
+            <MaterialCommunityIcons name="face-man-profile" size={26} color={AURA_THEME.colors.forestDark} />
           </View>
-        )}
+
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.courierName}>Mateo R.</Text>
+              <View style={styles.ratingPill}>
+                <Ionicons name="star" size={10} color={AURA_THEME.colors.star} />
+                <Text style={styles.ratingPillText}>4.95</Text>
+              </View>
+            </View>
+            <Text style={styles.courierRole}>Embajador Eco-Aura Spa</Text>
+            <Text style={styles.courierVehicle}>Bicicleta Eléctrica Aura #08</Text>
+          </View>
+
+          <View style={styles.courierActions}>
+            <TouchableOpacity
+              style={styles.iconActionBtn}
+              onPress={() => Alert.alert('Llamar', 'Conectando con Mateo Silva (Eco-Bike #08)...')}
+            >
+              <Ionicons name="call" size={16} color={AURA_THEME.colors.forestDark} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.iconActionBtn}
+              onPress={() => Alert.alert('Mensaje', 'Abriendo canal sereno de mensajes con Mateo...')}
+            >
+              <Ionicons name="chatbubble" size={16} color={AURA_THEME.colors.forestDark} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Security PIN Card matching Page 10 */}
+        <View style={styles.pinCard}>
+          <Text style={styles.pinCardLabel}>ENTREGA SEGURA</Text>
+          <Text style={styles.pinCodeText}>{securityPin}</Text>
+          <Text style={styles.pinHelperText}>Díselo a Mateo al recibir</Text>
+        </View>
+
+        {/* Order Details Preview */}
+        <View style={styles.orderSummaryCard}>
+          <View style={styles.orderSummaryHeader}>
+            <Text style={styles.orderCode}>{orderCode}</Text>
+            <Text style={styles.orderPrice}>$1,420 MXN</Text>
+          </View>
+          <Text style={styles.orderItemsPreview}>
+            2 elixires aromáticos (Elixir Nocturno Ciprés & Lavanda 100ml, Bruma Áurea Romero)
+          </Text>
+        </View>
+
+        {/* Support & Explore Actions */}
+        <View style={styles.bottomActions}>
+          <TouchableOpacity
+            style={styles.helpBtn}
+            onPress={() => Alert.alert('Ayuda', 'Sede Jardines del Valle: +52 55 4001 2233')}
+          >
+            <Ionicons name="help-buoy-outline" size={16} color={AURA_THEME.colors.forestDark} />
+            <Text style={styles.helpBtnText}>Ayuda / Soporte Sede Jardines</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.exploreMoreBtn} onPress={onGoToStores}>
+            <Text style={styles.exploreMoreText}>Explorar más Rituales Aura</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </View>
   );
@@ -315,400 +214,344 @@ export const OrderTrackingScreen: React.FC<OrderTrackingScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0E1014',
-  },
-  topBar: {
-    backgroundColor: '#12151B',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#222834',
-  },
-  topBarTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#FFF',
-  },
-  topBarSub: {
-    fontSize: 11,
-    color: '#8C96A5',
-    marginTop: 2,
-  },
-  refreshBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#202633',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#2A3241',
+    backgroundColor: AURA_THEME.colors.bgPrimary,
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 90,
   },
-  trackerCard: {
-    backgroundColor: '#181C24',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 14,
+  statusBanner: {
+    backgroundColor: '#EAF4EC',
+    borderRadius: AURA_THEME.borderRadius.xl,
+    padding: 18,
     borderWidth: 1,
-    borderColor: '#262D3B',
-  },
-  orderCodeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  orderCode: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#FF441F',
-  },
-  orderStoreName: {
-    fontSize: 13,
-    color: '#CBD5E1',
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  statusPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-  },
-  statusPillText: {
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  currentStepBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#11141A',
-    borderRadius: 12,
-    padding: 14,
-    gap: 12,
-    borderWidth: 1.5,
+    borderColor: '#D4E8D8',
     marginBottom: 16,
   },
-  stepTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  stepSubtitle: {
-    fontSize: 11,
-    color: '#8C96A5',
-    marginTop: 2,
-  },
-  progressPipeline: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-    paddingHorizontal: 8,
-  },
-  stepPipelineItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  pipelineNode: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#262D3C',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 2,
-  },
-  nodePast: {
-    backgroundColor: '#00E676',
-  },
-  nodeCurrent: {
-    borderWidth: 2,
-    borderColor: '#FFF',
-  },
-  nodeNumber: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  pipelineLine: {
-    flex: 1,
-    height: 3,
-    backgroundColor: '#262D3C',
-    marginHorizontal: 2,
-  },
-  lineActive: {
-    backgroundColor: '#00E676',
-  },
-  pipelineLabels: {
+  badgeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 4,
-    marginBottom: 16,
-  },
-  pipeLabelText: {
-    fontSize: 9,
-    color: '#687385',
-    fontWeight: '600',
-  },
-  pinCard: {
-    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#222017',
-    borderWidth: 1,
-    borderColor: '#FFB300',
-    borderRadius: 12,
-    padding: 12,
-    gap: 10,
-  },
-  pinIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 179, 0, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  pinLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFD54F',
-  },
-  pinSub: {
-    fontSize: 10,
-    color: '#CBD5E1',
-    marginTop: 2,
-  },
-  pinBadge: {
-    backgroundColor: '#FFB300',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  pinCode: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: '#000',
-    letterSpacing: 2,
-  },
-  courierCard: {
-    backgroundColor: '#181C24',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#262D3B',
-  },
-  cardHeaderSmall: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#8C96A5',
-    textTransform: 'uppercase',
     marginBottom: 10,
   },
-  courierRow: {
+  enCaminoBadge: {
+    backgroundColor: AURA_THEME.colors.terracotta,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  enCaminoBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.8,
+  },
+  co2Badge: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
+    backgroundColor: AURA_THEME.colors.sageBadge,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: AURA_THEME.borderRadius.full,
+  },
+  co2BadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: AURA_THEME.colors.forestDark,
+  },
+  statusTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
+    marginBottom: 4,
+  },
+  statusSubtitle: {
+    fontSize: 12.5,
+    color: AURA_THEME.colors.textSecondary,
+    marginBottom: 16,
+  },
+  routeVisual: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    marginBottom: 10,
+  },
+  routePoint: {
+    alignItems: 'center',
+    width: 80,
+  },
+  pointCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: AURA_THEME.colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderMedium,
+    marginBottom: 4,
+  },
+  pointCircleDestination: {
+    backgroundColor: AURA_THEME.colors.terracottaSoft,
+    borderColor: AURA_THEME.colors.terracottaBadge,
+  },
+  pointLabel: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: AURA_THEME.colors.forestDark,
+  },
+  routeLineActive: {
+    flex: 1,
+    height: 2,
+    backgroundColor: AURA_THEME.colors.forestDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 8,
+    position: 'relative',
+  },
+  bikeIconFloating: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: AURA_THEME.colors.forestDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  routeThermalNote: {
+    fontSize: 10.5,
+    color: AURA_THEME.colors.textMuted,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  stepsCard: {
+    backgroundColor: AURA_THEME.colors.surface,
+    borderRadius: AURA_THEME.borderRadius.xl,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderLight,
+    marginBottom: 14,
+  },
+  stepsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  stepsTitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: AURA_THEME.colors.textMuted,
+    letterSpacing: 0.8,
+  },
+  stepCounterText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: AURA_THEME.colors.forestDark,
+  },
+  stepsProgressRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  stepItem: {
+    alignItems: 'center',
+    width: 65,
+  },
+  stepCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: AURA_THEME.colors.surfaceSubtle,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderMedium,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  stepCirclePast: {
+    backgroundColor: AURA_THEME.colors.forestDark,
+    borderColor: AURA_THEME.colors.forestDark,
+  },
+  stepCircleCurrent: {
+    backgroundColor: AURA_THEME.colors.terracotta,
+    borderColor: AURA_THEME.colors.terracotta,
+  },
+  stepNum: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: AURA_THEME.colors.textSecondary,
+  },
+  stepLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: AURA_THEME.colors.textMuted,
+  },
+  stepLabelActive: {
+    color: AURA_THEME.colors.forestDark,
+    fontWeight: '700',
+  },
+  stepExplanationBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: AURA_THEME.colors.surfaceSubtle,
+    borderRadius: AURA_THEME.borderRadius.sm,
+    padding: 8,
+    gap: 6,
+  },
+  stepExplanationText: {
+    flex: 1,
+    fontSize: 10.5,
+    color: AURA_THEME.colors.textSecondary,
+    lineHeight: 14,
+  },
+  courierCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: AURA_THEME.colors.surface,
+    borderRadius: AURA_THEME.borderRadius.lg,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderLight,
+    marginBottom: 14,
     gap: 12,
   },
-  courierAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
+  courierAvatarBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: AURA_THEME.colors.sageBadge,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   courierName: {
     fontSize: 14,
-    fontWeight: '700',
-    color: '#FFF',
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
   },
-  courierAlias: {
-    fontSize: 12,
-    color: '#8C96A5',
-    marginTop: 2,
-  },
-  courierMeta: {
+  ratingPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 4,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    gap: 2,
   },
-  ratingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#252B37',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    gap: 3,
+  ratingPillText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#92400E',
   },
-  ratingText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#FFB300',
-  },
-  dotSeparator: {
-    color: '#4B5563',
-    fontSize: 10,
-  },
-  metaText: {
+  courierRole: {
     fontSize: 11,
-    color: '#CBD5E1',
+    color: AURA_THEME.colors.textSecondary,
   },
-  infoCard: {
-    backgroundColor: '#181C24',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#262D3B',
+  courierVehicle: {
+    fontSize: 10,
+    color: AURA_THEME.colors.textMuted,
   },
-  infoRow: {
+  courierActions: {
     flexDirection: 'row',
-    alignItems: 'center',
     gap: 8,
   },
-  infoText: {
-    fontSize: 13,
-    color: '#FFF',
-    fontWeight: '600',
-    flex: 1,
-  },
-  infoSubText: {
-    fontSize: 11,
-    color: '#8C96A5',
-    fontStyle: 'italic',
-    flex: 1,
-  },
-  orderItemRow: {
-    flexDirection: 'row',
+  iconActionBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: AURA_THEME.colors.surfaceSubtle,
     alignItems: 'center',
-    paddingVertical: 4,
-  },
-  orderItemQty: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FF441F',
-    width: 24,
-  },
-  orderItemName: {
-    fontSize: 12,
-    color: '#CBD5E1',
-    flex: 1,
-  },
-  orderItemPrice: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#00E676',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#252B37',
-    marginVertical: 10,
-  },
-  orderTotalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  orderTotalLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  orderTotalVal: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#00E676',
-  },
-  historyCard: {
-    backgroundColor: '#181C24',
-    borderRadius: 14,
-    padding: 14,
+    justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#262D3B',
+    borderColor: AURA_THEME.colors.borderMedium,
   },
-  historyItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  pinCard: {
+    backgroundColor: '#FAF5EE',
+    borderRadius: AURA_THEME.borderRadius.xl,
+    padding: 16,
     alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#202632',
+    borderWidth: 1,
+    borderColor: '#E8DCB8',
+    marginBottom: 14,
   },
-  historyItemActive: {
-    backgroundColor: '#202633',
-    paddingHorizontal: 8,
-    borderRadius: 8,
+  pinCardLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
+    letterSpacing: 1.5,
+    marginBottom: 4,
   },
-  historyCode: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFF',
+  pinCodeText: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: AURA_THEME.colors.forestDark,
+    letterSpacing: 8,
+    marginVertical: 4,
   },
-  historyStore: {
+  pinHelperText: {
     fontSize: 11,
-    color: '#8C96A5',
+    color: AURA_THEME.colors.textSecondary,
+    fontWeight: '600',
   },
-  historyRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  historyStatus: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FFB300',
-    textTransform: 'uppercase',
-  },
-  emptyContainer: {
-    flex: 1,
-    backgroundColor: '#0E1014',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 30,
-  },
-  emptyIconCircle: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: 'rgba(255, 68, 31, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
+  orderSummaryCard: {
+    backgroundColor: AURA_THEME.colors.surface,
+    borderRadius: AURA_THEME.borderRadius.lg,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderLight,
     marginBottom: 16,
   },
-  emptyTitle: {
-    fontSize: 18,
+  orderSummaryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  orderCode: {
+    fontSize: 12,
     fontWeight: '800',
-    color: '#FFF',
-    marginBottom: 8,
+    color: AURA_THEME.colors.forestDark,
   },
-  emptySub: {
-    fontSize: 13,
-    color: '#8C96A5',
-    textAlign: 'center',
-    lineHeight: 18,
-    marginBottom: 20,
+  orderPrice: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
   },
-  exploreBtn: {
-    backgroundColor: '#FF441F',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
+  orderItemsPreview: {
+    fontSize: 11,
+    color: AURA_THEME.colors.textMuted,
   },
-  exploreBtnText: {
-    color: '#FFF',
+  bottomActions: {
+    gap: 8,
+  },
+  helpBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: AURA_THEME.colors.surface,
+    paddingVertical: 10,
+    borderRadius: AURA_THEME.borderRadius.md,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderLight,
+    gap: 6,
+  },
+  helpBtnText: {
+    fontSize: 12,
     fontWeight: '700',
-    fontSize: 14,
+    color: AURA_THEME.colors.forestDark,
+  },
+  exploreMoreBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+  },
+  exploreMoreText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: AURA_THEME.colors.terracotta,
   },
 });

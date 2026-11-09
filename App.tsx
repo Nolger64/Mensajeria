@@ -2,90 +2,68 @@ import React, { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { AppProvider, useApp } from './src/context/AppContext';
-import { RoleSwitcherBar } from './src/components/RoleSwitcher/RoleSwitcherBar';
-import { DriverRadarScreen } from './src/screens/DriverRadarScreen';
-import { OrdersHistoryScreen } from './src/screens/OrdersHistoryScreen';
-import { WalletScreen } from './src/screens/WalletScreen';
-import { ProfileScreen } from './src/screens/ProfileScreen';
-import { AdminDashboardScreen } from './src/screens/Admin/AdminDashboardScreen';
-import { TestLabScreen } from './src/screens/TestLab/TestLabScreen';
-import { DriverTabBar, TabKey } from './src/components/Navigation/DriverTabBar';
 
-function MainAppContent() {
-  const { role, allOrders } = useApp();
-  const [driverTab, setDriverTab] = useState<TabKey>('radar');
+// Sub-aplicaciones del ecosistema FHS
+import RepartidorApp from './repartidor/App';
+import AdministradorApp from './administrador/App';
+import ClienteApp from './cliente/App';
 
-  const activeOrdersCount = allOrders.filter(
-    (o) => o.status === 'rumbo_tienda' || o.status === 'en_tienda' || o.status === 'rumbo_cliente'
-  ).length;
-
-  return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <StatusBar style="light" />
-
-      {/* Top Universal Ecosystem Switcher */}
-      <RoleSwitcherBar />
-
-      {/* Role Screen Views */}
-      <View style={styles.screenContainer}>
-        {role === 'repartidor' && (
-          <View style={styles.roleContainer}>
-            <View style={styles.subScreenArea}>
-              {driverTab === 'radar' && <DriverRadarScreen />}
-              {driverTab === 'pedidos' && <OrdersHistoryScreen />}
-              {driverTab === 'billetera' && <WalletScreen />}
-              {driverTab === 'perfil' && <ProfileScreen />}
-            </View>
-
-            {/* Bottom tab bar for Repartidor */}
-            <DriverTabBar
-              activeTab={driverTab}
-              onSelectTab={setDriverTab}
-              activeOrderCount={activeOrdersCount}
-            />
-          </View>
-        )}
-
-        {role === 'admin' && (
-          <View style={styles.roleContainer}>
-            <AdminDashboardScreen />
-          </View>
-        )}
-
-        {role === 'test_lab' && (
-          <View style={styles.roleContainer}>
-            <TestLabScreen />
-          </View>
-        )}
-      </View>
-    </SafeAreaView>
-  );
-}
+// Portal Único de Acceso y Servicios
+import { LoginPortalScreen } from './src/screens/Auth/LoginPortalScreen';
+import { AuthUser, authService } from './src/services/authService';
 
 export default function App() {
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+
+  const handleLoginSuccess = (user: AuthUser) => {
+    setCurrentUser(user);
+  };
+
+  const handleLogout = () => {
+    authService.logout();
+    setCurrentUser(null);
+  };
+
   return (
     <SafeAreaProvider>
-      <AppProvider>
-        <MainAppContent />
-      </AppProvider>
+      <StatusBar style="dark" />
+      {/* 1. Si no hay sesión activa: Mostrar Portal Único de Acceso */}
+      {!currentUser && (
+        <SafeAreaView style={styles.portalSafeArea} edges={['top', 'left', 'right', 'bottom']}>
+          <LoginPortalScreen onLoginSuccess={handleLoginSuccess} />
+        </SafeAreaView>
+      )}
+
+      {/* 2. Si el usuario es Repartidor: Abrir Aplicación de Repartidor */}
+      {currentUser && currentUser.role === 'repartidor' && (
+        <View style={styles.appContainer}>
+          <RepartidorApp onLogout={handleLogout} currentUser={currentUser} />
+        </View>
+      )}
+
+      {/* 3. Si el usuario es Administrador: Abrir Aplicación de Administrador */}
+      {currentUser && (currentUser.role === 'administrador' || (currentUser.role as string) === 'admin') && (
+        <View style={styles.appContainer}>
+          <AdministradorApp onLogout={handleLogout} currentUser={currentUser} />
+        </View>
+      )}
+
+      {/* 4. Si el usuario es Cliente / Usuario: Abrir Aplicación de Cliente */}
+      {currentUser && currentUser.role === 'cliente' && (
+        <View style={styles.appContainer}>
+          <ClienteApp onLogout={handleLogout} currentUser={currentUser} />
+        </View>
+      )}
     </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  portalSafeArea: {
     flex: 1,
-    backgroundColor: '#0F1113',
+    backgroundColor: '#F2F7F3',
   },
-  screenContainer: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
-  roleContainer: {
-    flex: 1,
-  },
-  subScreenArea: {
+  appContainer: {
     flex: 1,
   },
 });

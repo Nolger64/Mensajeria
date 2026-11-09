@@ -5,1310 +5,2003 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  TextInput,
   Alert,
-  Modal,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useApp } from '../../context/AppContext';
-import { AdminFleetMap } from './AdminFleetMap';
-import { Coworker, DeliveryOrder, PartnerStore, Product, StoreCategory, PartnerTier } from '../../types';
-import { FHSApiService } from '../../services/api';
+import { AURA_THEME } from '../../../../src/theme/auraTheme';
+import { AdminCentralTab } from '../../../App';
 
-type AdminTab = 'mapa' | 'tiendas' | 'ubicaciones' | 'trabajadores' | 'pedidos' | 'broadcast';
+interface AdminDashboardScreenProps {
+  activeCentralTab?: AdminCentralTab;
+  onSelectTab?: (tab: AdminCentralTab) => void;
+}
 
-export const AdminDashboardScreen: React.FC = () => {
-  const {
-    driver,
-    coworkers,
-    stores,
-    allOrders,
-    deliveryStars,
-    addStore,
-    updateCoworkerStatus,
-    assignOrderToCoworker,
-    sendCommunityMessage,
-    simulateCoworkersMovement,
-    dispatchMode,
-    setDispatchMode,
-  } = useApp();
+export const AdminDashboardScreen: React.FC<AdminDashboardScreenProps> = ({
+  activeCentralTab = 'operaciones',
+  onSelectTab,
+}) => {
+  // Operaciones state
+  const [operationalPause, setOperationalPause] = useState(false);
+  const [flowFilter, setFlowFilter] = useState<'todos' | 'botica' | 'ruta' | 'alerta'>('todos');
 
-  const [activeTab, setActiveTab] = useState<AdminTab>('mapa');
-  const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
-  const [broadcastText, setBroadcastText] = useState('');
-  const [workerFilter, setWorkerFilter] = useState<'todos' | 'disponible' | 'en_ruta' | 'en_tienda'>('todos');
+  // Sedes & Stock state
+  const [stockSedeFilter, setStockSedeFilter] = useState<'todas' | 'jardines' | 'providencia'>('todas');
 
-  // Store Management State
-  const [selectedStore, setSelectedStore] = useState<PartnerStore | null>(null);
-  const [editStoreModal, setEditStoreModal] = useState(false);
-  const [editStoreName, setEditStoreName] = useState('');
-  const [editStoreAddress, setEditStoreAddress] = useState('');
-  const [editStoreBonus, setEditStoreBonus] = useState('');
-  const [editStoreTier, setEditStoreTier] = useState<PartnerTier>('diamond');
-  const [editStoreCategory, setEditStoreCategory] = useState<StoreCategory>('restaurante');
-  const [editStoreLat, setEditStoreLat] = useState('');
-  const [editStoreLng, setEditStoreLng] = useState('');
+  // Flota state
+  const [fleetFilter, setFleetFilter] = useState<'todos' | 'ruta' | 'sede' | 'pausa'>('todos');
 
-  // Product Add State
-  const [newProdName, setNewProdName] = useState('');
-  const [newProdPrice, setNewProdPrice] = useState('');
-  const [newProdDesc, setNewProdDesc] = useState('');
-  const [newProdEmoji, setNewProdEmoji] = useState('🍔');
-  const [showAddProdModal, setShowAddProdModal] = useState(false);
+  // Métricas state
+  const [periodFilter, setPeriodFilter] = useState<'hoy' | 'semana' | 'mes'>('hoy');
 
-  // Stats calculation
-  const totalCouriers = coworkers.length + 1;
-  const availableCouriers = coworkers.filter((c) => c.status === 'disponible').length + (driver.isOnline ? 1 : 0);
-  const inRouteCouriers = coworkers.filter((c) => c.status === 'en_ruta').length;
-  const pendingOrders = allOrders.filter((o) => o.status === 'pendiente');
-  const activeOrders = allOrders.filter(
-    (o) => o.status === 'rumbo_tienda' || o.status === 'en_tienda' || o.status === 'rumbo_cliente' || o.status === 'ofertado'
-  );
-
-  const allFleetWorkers = [
-    {
-      id: driver.id,
-      name: `${driver.name} (Tú)`,
-      nickname: `${driver.alias} (Tú)`,
-      vehicle: driver.vehicle,
-      vehicleModel: driver.vehicleModel,
-      status: driver.isOnline ? ('disponible' as const) : ('descanso' as const),
-    },
-    ...coworkers,
-  ];
-
-  const selectedWorker =
-    selectedWorkerId === driver.id
-      ? {
-          id: driver.id,
-          name: driver.name,
-          nickname: driver.alias,
-          vehicle: driver.vehicle,
-          vehicleModel: driver.vehicleModel,
-          status: driver.isOnline ? ('disponible' as const) : ('descanso' as const),
-          rating: driver.rating,
-          completedOrdersToday: driver.totalOrdersToday,
-          batteryLevel: 96,
-          coordinates: driver.coordinates,
-          currentZone: 'Centro del Radar',
-        }
-      : coworkers.find((c) => c.id === selectedWorkerId);
-
-  const filteredWorkers = coworkers.filter((c) => {
-    if (workerFilter === 'todos') return true;
-    return c.status === workerFilter;
-  });
-
-  const handleBroadcast = (textToSend?: string) => {
-    const msg = textToSend || broadcastText;
-    if (!msg.trim()) return;
-
-    sendCommunityMessage(msg.trim(), 'alerta', 'Torre de Control FHS (Admin)');
-    setBroadcastText('');
-    Alert.alert('¡Aviso Emitido!', 'El comunicado fue enviado a todos los repartidores activos.');
-  };
-
-  const openEditStore = (store: PartnerStore) => {
-    setSelectedStore(store);
-    setEditStoreName(store.name);
-    setEditStoreAddress(store.address);
-    setEditStoreBonus(store.bonusAmount.toString());
-    setEditStoreTier(store.partnerTier);
-    setEditStoreCategory(store.category);
-    setEditStoreLat(store.coordinates.latitude.toString());
-    setEditStoreLng(store.coordinates.longitude.toString());
-    setEditStoreModal(true);
-  };
-
-  const handleSaveStoreChanges = async () => {
-    if (!selectedStore) return;
-    const updatedFields: Partial<PartnerStore> = {
-      name: editStoreName.trim(),
-      address: editStoreAddress.trim(),
-      bonusAmount: Number(editStoreBonus) || 0,
-      hasBonus: Number(editStoreBonus) > 0,
-      partnerTier: editStoreTier,
-      category: editStoreCategory,
-      coordinates: {
-        latitude: parseFloat(editStoreLat) || selectedStore.coordinates.latitude,
-        longitude: parseFloat(editStoreLng) || selectedStore.coordinates.longitude,
-      },
-    };
-
-    // Update in local stores and send PATCH to server
-    Object.assign(selectedStore, updatedFields);
-    try {
-      await fetch(`${FHSApiService.getServerUrl()}/api/stores/${selectedStore.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedFields),
-      });
-    } catch {}
-
-    setEditStoreModal(false);
-    Alert.alert('¡Cambios Guardados!', `La tienda "${selectedStore.name}" fue actualizada exitosamente.`);
-  };
-
-  const handleAddProductToStore = async () => {
-    if (!selectedStore || !newProdName.trim() || !newProdPrice.trim()) {
-      Alert.alert('Error', 'Ingresa nombre y precio del producto');
-      return;
-    }
-
-    const newProd: Product = {
-      id: `p-${Date.now().toString().slice(-4)}`,
-      name: newProdName.trim(),
-      price: Number(newProdPrice),
-      description: newProdDesc.trim() || 'Producto disponible para pedido inmediato',
-      emoji: newProdEmoji,
-      available: true,
-    };
-
-    if (!selectedStore.products) selectedStore.products = [];
-    selectedStore.products.push(newProd);
-
-    try {
-      await fetch(`${FHSApiService.getServerUrl()}/api/stores/${selectedStore.id}/products`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newProd),
-      });
-    } catch {}
-
-    setNewProdName('');
-    setNewProdPrice('');
-    setNewProdDesc('');
-    setShowAddProdModal(false);
-    Alert.alert('Producto Añadido', `Se agregó "${newProd.name}" al catálogo de ${selectedStore.name}`);
-  };
-
-  const handleDeleteProduct = async (productId: string) => {
-    if (!selectedStore || !selectedStore.products) return;
-    selectedStore.products = selectedStore.products.filter((p) => p.id !== productId);
-
-    try {
-      await fetch(`${FHSApiService.getServerUrl()}/api/stores/${selectedStore.id}/products/${productId}`, {
-        method: 'DELETE',
-      });
-    } catch {}
-
-    Alert.alert('Producto Eliminado', 'El producto fue retirado del catálogo.');
-  };
-
-  const formatCurrency = (val: number) => '$' + val.toLocaleString('es-CO');
-
-  return (
-    <View style={styles.container}>
-      {/* Top KPI Header */}
-      <View style={styles.topKpiBar}>
-        <View style={styles.kpiCard}>
-          <Text style={styles.kpiVal}>{totalCouriers}</Text>
-          <Text style={styles.kpiLabel}>Flota Total</Text>
+  // 1. TAB OPERACIONES (Page 12)
+  const renderOperacionesTab = () => (
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      {/* Top action pause bar */}
+      <View style={styles.topControlBanner}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.controlBannerTitle}>Red de Boticas Activa</Text>
+          <Text style={styles.controlBannerSub}>3/3 Sedes 100% operando con despacho continuo</Text>
         </View>
-        <View style={styles.kpiCard}>
-          <Text style={[styles.kpiVal, { color: '#00C853' }]}>{availableCouriers}</Text>
-          <Text style={styles.kpiLabel}>Disponibles</Text>
-        </View>
-        <View style={styles.kpiCard}>
-          <Text style={[styles.kpiVal, { color: pendingOrders.length > 0 ? '#FF1744' : '#8B949E' }]}>
-            {pendingOrders.length}
+        <TouchableOpacity
+          style={[styles.pauseOpsBtn, operationalPause && styles.pauseOpsBtnActive]}
+          onPress={() => {
+            const next = !operationalPause;
+            setOperationalPause(next);
+            Alert.alert(
+              next ? '⏸️ Pausa Activada' : '▶️ Operación Reanudada',
+              next
+                ? 'Se han pausado temporalmente las asignaciones automáticas de pedidos exprés.'
+                : 'La red botánica está recibiendo y despachando con normalidad.'
+            );
+          }}
+          activeOpacity={0.8}
+        >
+          <Ionicons name={operationalPause ? 'play' : 'pause'} size={14} color="#FFFFFF" />
+          <Text style={styles.pauseOpsBtnText}>
+            {operationalPause ? 'Reanudar Red' : 'Pausa Operativa General'}
           </Text>
-          <Text style={styles.kpiLabel}>Por Asignar</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Metrics Row */}
+      <View style={styles.metricsQuadRow}>
+        <View style={styles.metricQuadCard}>
+          <Text style={styles.metricQuadLabel}>EN CURSO</Text>
+          <Text style={styles.metricQuadVal}>38 ped.</Text>
+          <Text style={styles.metricQuadSub}>14 botica · 19 ruta · 5 val</Text>
         </View>
-        <View style={styles.kpiCard}>
-          <Text style={[styles.kpiVal, { color: '#FF441F' }]}>{activeOrders.length}</Text>
-          <Text style={styles.kpiLabel}>En Ruta</Text>
+        <View style={styles.metricQuadCard}>
+          <Text style={styles.metricQuadLabel}>FACTURACIÓN</Text>
+          <Text style={styles.metricQuadVal}>$28,450</Text>
+          <Text style={[styles.metricQuadSub, { color: AURA_THEME.colors.statusGreen }]}>+18.4% vs ayer</Text>
         </View>
-        <View style={styles.kpiCard}>
-          <Text style={[styles.kpiVal, { color: '#FFB300' }]}>{stores.length}</Text>
-          <Text style={styles.kpiLabel}>Tiendas</Text>
+        <View style={styles.metricQuadCard}>
+          <Text style={styles.metricQuadLabel}>T. DESPACHO</Text>
+          <Text style={styles.metricQuadVal}>23 min</Text>
+          <Text style={styles.metricQuadSub}>Meta ≤ 25 min</Text>
+        </View>
+        <View style={styles.metricQuadCard}>
+          <Text style={styles.metricQuadLabel}>SERENIDAD</Text>
+          <Text style={[styles.metricQuadVal, { color: AURA_THEME.colors.statusGreen }]}>98.6%</Text>
+          <Text style={styles.metricQuadSub}>Índice cliente</Text>
         </View>
       </View>
 
-      {/* Control de Modo de Asignación de Pedidos (Solo Administradores) */}
-      <View style={styles.modeControlCard}>
-        <View style={styles.modeControlHeader}>
-          <View style={styles.modeBadgeRow}>
-            <View style={[styles.modeStatusDot, dispatchMode === 'manual' ? styles.dotManual : styles.dotAuto]} />
-            <Text style={styles.modeStatusTitle}>
-              {dispatchMode === 'manual' ? 'MODO MANUAL (POR DEFECTO)' : 'MODO AUTOMÁTICO (POR LA APP)'}
-            </Text>
+      {/* Atención Requerida */}
+      <View style={styles.attentionSection}>
+        <View style={styles.attentionHeader}>
+          <Text style={styles.sectionTitle}>Atención Requerida</Text>
+          <View style={styles.alertBadge}>
+            <Text style={styles.alertBadgeText}>2 Urgentes</Text>
           </View>
-          <Text style={styles.modeDescriptionText}>
-            {dispatchMode === 'manual'
-              ? '📋 El administrador debe asignar manualmente cada domicilio a los repartidores.'
-              : '⚡ La app asigna y envía automáticamente los pedidos a los repartidores libres.'}
+        </View>
+
+        {/* Urgent Item 1 */}
+        <View style={styles.urgentCard}>
+          <View style={styles.urgentCardHeader}>
+            <Text style={styles.urgentTag}>MANIPULACIÓN FINA</Text>
+            <Text style={styles.urgentSede}>Sede Providencia</Text>
+          </View>
+          <Text style={styles.urgentTitle}>
+            #AUR-8924 · Frasco ámbar de infusión floral requiere cofre de lino acolchado antes de sellar.
           </Text>
-        </View>
-
-        <View style={styles.modeButtonsRow}>
-          <TouchableOpacity
-            style={[
-              styles.modeToggleBtn,
-              dispatchMode === 'manual' && styles.modeBtnActiveManual,
-            ]}
-            onPress={async () => {
-              if (dispatchMode !== 'manual') {
-                await setDispatchMode('manual');
-                Alert.alert('Modo Asignación', 'Modo Manual activado (Por defecto): El administrador asigna cada pedido a los repartidores.');
-              }
-            }}
-            activeOpacity={0.8}
-          >
-            <MaterialCommunityIcons
-              name="account-check"
-              size={15}
-              color={dispatchMode === 'manual' ? '#FFFFFF' : '#8B949E'}
-            />
-            <Text
-              style={[
-                styles.modeToggleBtnText,
-                dispatchMode === 'manual' && styles.modeToggleBtnTextActive,
-              ]}
-            >
-              Manual (Por Defecto)
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.modeToggleBtn,
-              dispatchMode === 'automatic' && styles.modeBtnActiveAuto,
-            ]}
-            onPress={async () => {
-              if (dispatchMode !== 'automatic') {
-                await setDispatchMode('automatic');
-                Alert.alert('Modo Asignación', 'Modo Automático activado: La aplicación asignará los pedidos a los repartidores automáticamente.');
-              }
-            }}
-            activeOpacity={0.8}
-          >
-            <MaterialCommunityIcons
-              name="lightning-bolt"
-              size={15}
-              color={dispatchMode === 'automatic' ? '#FFFFFF' : '#8B949E'}
-            />
-            <Text
-              style={[
-                styles.modeToggleBtnText,
-                dispatchMode === 'automatic' && styles.modeToggleBtnTextActive,
-              ]}
-            >
-              Automático (App)
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Subnav with Store and Location Tabs */}
-      <View style={styles.subnav}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subnavScroll}>
-          <TouchableOpacity
-            style={[styles.subnavItem, activeTab === 'mapa' && styles.subnavItemActive]}
-            onPress={() => setActiveTab('mapa')}
-          >
-            <Ionicons name="map" size={15} color={activeTab === 'mapa' ? '#FF441F' : '#8B949E'} />
-            <Text style={[styles.subnavText, activeTab === 'mapa' && styles.subnavTextActive]}>Mapa Flota</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.subnavItem, activeTab === 'tiendas' && styles.subnavItemActive]}
-            onPress={() => setActiveTab('tiendas')}
-          >
-            <MaterialCommunityIcons name="storefront-outline" size={15} color={activeTab === 'tiendas' ? '#FF441F' : '#8B949E'} />
-            <Text style={[styles.subnavText, activeTab === 'tiendas' && styles.subnavTextActive]}>
-              Tiendas & Productos ({stores.length})
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.subnavItem, activeTab === 'ubicaciones' && styles.subnavItemActive]}
-            onPress={() => setActiveTab('ubicaciones')}
-          >
-            <Ionicons name="star" size={15} color={activeTab === 'ubicaciones' ? '#FFB300' : '#8B949E'} />
-            <Text style={[styles.subnavText, activeTab === 'ubicaciones' && styles.subnavTextActive]}>
-              ⭐ Ubicaciones ({deliveryStars.length})
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.subnavItem, activeTab === 'trabajadores' && styles.subnavItemActive]}
-            onPress={() => setActiveTab('trabajadores')}
-          >
-            <Ionicons name="people" size={15} color={activeTab === 'trabajadores' ? '#FF441F' : '#8B949E'} />
-            <Text style={[styles.subnavText, activeTab === 'trabajadores' && styles.subnavTextActive]}>
-              Repartidores ({coworkers.length})
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.subnavItem, activeTab === 'pedidos' && styles.subnavItemActive]}
-            onPress={() => setActiveTab('pedidos')}
-          >
-            <Ionicons name="cube" size={15} color={activeTab === 'pedidos' ? '#FF441F' : '#8B949E'} />
-            <Text style={[styles.subnavText, activeTab === 'pedidos' && styles.subnavTextActive]}>
-              Despacho {pendingOrders.length > 0 ? `(${pendingOrders.length} Pendientes)` : `(${allOrders.length})`}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.subnavItem, activeTab === 'broadcast' && styles.subnavItemActive]}
-            onPress={() => setActiveTab('broadcast')}
-          >
-            <Ionicons name="megaphone" size={15} color={activeTab === 'broadcast' ? '#FF441F' : '#8B949E'} />
-            <Text style={[styles.subnavText, activeTab === 'broadcast' && styles.subnavTextActive]}>Avisos</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
-
-      {/* TAB 1: FLEET MAP */}
-      {activeTab === 'mapa' && (
-        <View style={styles.mapContainer}>
-          <AdminFleetMap
-            driver={driver}
-            coworkers={coworkers}
-            stores={stores}
-            activeOrders={activeOrders}
-            onSelectWorker={(id) => setSelectedWorkerId(id)}
-            onSelectStore={(stId) => {
-              const st = stores.find((s) => s.id === stId);
-              if (st) openEditStore(st);
-            }}
-          />
-
-          <TouchableOpacity
-            style={styles.simulateJitterBtn}
-            onPress={simulateCoworkersMovement}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="refresh" size={16} color="#FFFFFF" />
-            <Text style={styles.simulateJitterText}>Simular Telemetría GPS</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* TAB 2: STORES & PRODUCTS MANAGEMENT */}
-      {activeTab === 'tiendas' && (
-        <ScrollView style={styles.scrollSection} showsVerticalScrollIndicator={false}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.tabSectionTitle}>Gestión de Comercios Aliados y Catálogo</Text>
-          </View>
-
-          {stores.map((st) => (
-            <View key={st.id} style={styles.adminStoreCard}>
-              <View style={styles.storeCardTop}>
-                <View style={styles.storeIconBox}>
-                  <Text style={{ fontSize: 24 }}>{st.logo}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <View style={styles.rowBetween}>
-                    <Text style={styles.storeNameText}>{st.name}</Text>
-                    <View style={[styles.tierTag, st.partnerTier === 'diamond' ? styles.tierDiamond : styles.tierGold]}>
-                      <Text style={styles.tierTagText}>{st.partnerTier.toUpperCase()}</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.storeAddressText}>📍 {st.address}</Text>
-                  <Text style={styles.storeMetaText}>
-                    {st.category.toUpperCase()} • Bono: {formatCurrency(st.bonusAmount)} • Coords: {st.coordinates.latitude.toFixed(4)}, {st.coordinates.longitude.toFixed(4)}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Products preview */}
-              <View style={styles.productsMiniBox}>
-                <Text style={styles.productsTitle}>Productos ({st.products?.length || 0}):</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
-                  {st.products?.map((prod) => (
-                    <View key={prod.id} style={styles.productChip}>
-                      <Text style={{ fontSize: 13 }}>{prod.emoji}</Text>
-                      <Text style={styles.productChipName}>{prod.name}</Text>
-                      <Text style={styles.productChipPrice}>{formatCurrency(prod.price)}</Text>
-                    </View>
-                  ))}
-                  {(!st.products || st.products.length === 0) && (
-                    <Text style={styles.noProdText}>Sin productos registrados aún</Text>
-                  )}
-                </ScrollView>
-              </View>
-
-              {/* Action button */}
-              <TouchableOpacity
-                style={styles.editStoreBtn}
-                onPress={() => openEditStore(st)}
-                activeOpacity={0.8}
-              >
-                <MaterialCommunityIcons name="pencil-box-multiple" size={16} color="#FFFFFF" />
-                <Text style={styles.editStoreBtnText}>Editar Tienda & Gestionar Productos</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-        </ScrollView>
-      )}
-
-      {/* TAB 3: RECENT DELIVERY LOCATIONS (Estrellitas) */}
-      {activeTab === 'ubicaciones' && (
-        <ScrollView style={styles.scrollSection} showsVerticalScrollIndicator={false}>
-          <Text style={styles.tabSectionTitle}>Puntos de Entrega Frecuente & Estrellitas ⭐</Text>
-          <Text style={styles.tabSectionSub}>
-            Direcciones verificadas por los repartidores en calle con consejos de recepción y acceso rápido.
-          </Text>
-
-          {deliveryStars.map((star) => (
-            <View key={star.id} style={styles.starLocationCard}>
-              <View style={styles.starCardHeader}>
-                <View style={styles.starBadgeBox}>
-                  <Text style={{ fontSize: 20 }}>⭐</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.starAddressTitle}>{star.address}</Text>
-                  <Text style={styles.starCoordsText}>
-                    📍 Lat: {star.coordinates.latitude.toFixed(5)} • Lng: {star.coordinates.longitude.toFixed(5)}
-                  </Text>
-                </View>
-                <View style={styles.ratingPill}>
-                  <Text style={styles.ratingPillText}>{star.stars} ⭐</Text>
-                </View>
-              </View>
-
-              <View style={styles.starNotesBox}>
-                <Text style={styles.starNotesLabel}>Tip de Acceso del Domiciliario:</Text>
-                <Text style={styles.starNotesText}>"{star.notes}"</Text>
-              </View>
-
-              <View style={styles.starFooter}>
-                <Text style={styles.starCreatorText}>Registrado por: {star.createdBy}</Text>
-                <Text style={styles.starDateText}>{star.createdAt}</Text>
-              </View>
-            </View>
-          ))}
-        </ScrollView>
-      )}
-
-      {/* TAB 4: WORKERS LIST */}
-      {activeTab === 'trabajadores' && (
-        <View style={styles.workersContainer}>
-          <View style={styles.filterRow}>
-            {(['todos', 'disponible', 'en_ruta', 'en_tienda'] as const).map((f) => (
-              <TouchableOpacity
-                key={f}
-                style={[styles.filterChip, workerFilter === f && styles.filterChipActive]}
-                onPress={() => setWorkerFilter(f)}
-              >
-                <Text style={[styles.filterChipText, workerFilter === f && styles.filterChipTextActive]}>
-                  {f === 'todos' ? 'Todos' : f === 'disponible' ? 'Libres' : f === 'en_ruta' ? 'En Ruta' : 'En Tienda'}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <ScrollView style={styles.workersScroll} showsVerticalScrollIndicator={false}>
-            {filteredWorkers.map((cw) => {
-              const statusColor =
-                cw.status === 'disponible' ? '#00C853' : cw.status === 'en_ruta' ? '#2979FF' : '#FF9100';
-
-              return (
-                <View key={cw.id} style={styles.workerCard}>
-                  <View style={styles.workerCardTop}>
-                    <View style={styles.workerAvatar}>
-                      <Text style={{ fontSize: 20 }}>{cw.vehicle === 'moto' ? '🏍️' : '🚲'}</Text>
-                    </View>
-                    <View style={styles.workerDetails}>
-                      <View style={styles.rowBetween}>
-                        <Text style={styles.workerNameText}>{cw.name}</Text>
-                        <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-                          <Text style={styles.statusBadgeText}>{cw.status.toUpperCase()}</Text>
-                        </View>
-                      </View>
-                      <Text style={styles.workerSub}>{cw.vehicleModel} • {cw.currentZone}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.workerCardMetrics}>
-                    <View style={styles.metricPair}>
-                      <Ionicons name="battery-charging" size={14} color="#00C853" />
-                      <Text style={styles.metricValText}>{cw.batteryLevel}%</Text>
-                    </View>
-                    <View style={styles.metricPair}>
-                      <Ionicons name="star" size={14} color="#FFB300" />
-                      <Text style={styles.metricValText}>{cw.rating}</Text>
-                    </View>
-                    <View style={styles.metricPair}>
-                      <Ionicons name="checkmark-done" size={14} color="#2979FF" />
-                      <Text style={styles.metricValText}>{cw.completedOrdersToday} entregas</Text>
-                    </View>
-                  </View>
-
-                  <TouchableOpacity
-                    style={styles.workerActionBtn}
-                    onPress={() => setSelectedWorkerId(cw.id)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.workerActionBtnText}>Gestionar / Reasignar</Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            })}
-          </ScrollView>
-        </View>
-      )}
-
-      {/* TAB 5: ORDERS DISPATCH */}
-      {activeTab === 'pedidos' && (
-        <ScrollView style={styles.ordersScroll} showsVerticalScrollIndicator={false}>
-          <Text style={styles.tabSectionTitle}>Monitoreo de Despacho & Asignaciones</Text>
-
-          {/* SECCIÓN 1: PEDIDOS PENDIENTES DE ASIGNACIÓN */}
-          <View style={styles.pendingSection}>
-            <View style={styles.pendingSectionHeader}>
-              <Ionicons name="alert-circle" size={18} color="#FF1744" />
-              <Text style={styles.pendingSectionTitle}>
-                🚨 Pedidos Pendientes de Asignación ({pendingOrders.length})
-              </Text>
-            </View>
-            <Text style={styles.pendingSectionSub}>
-              {dispatchMode === 'manual'
-                ? '📋 MODO MANUAL ACTIVO: Selecciona un repartidor para despachar la orden.'
-                : '⚡ MODO AUTOMÁTICO ACTIVO: El sistema asigna automáticamente, o puedes asignar manualmente:'}
-            </Text>
-
-            {pendingOrders.length === 0 ? (
-              <View style={styles.emptyPendingCard}>
-                <Ionicons name="checkmark-done-circle-outline" size={24} color="#00E676" />
-                <Text style={styles.emptyPendingText}>No hay pedidos esperando asignación.</Text>
-              </View>
-            ) : (
-              pendingOrders.map((ord) => (
-                <View key={ord.id} style={styles.pendingOrderCard}>
-                  <View style={styles.orderAdminHeader}>
-                    <View style={styles.storeEmojiBox}>
-                      <Text style={{ fontSize: 18 }}>{ord.store?.logo || '📦'}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.orderAdminStore}>{ord.store?.name || 'Comercio'}</Text>
-                      <Text style={styles.orderAdminCode}>{ord.orderCode} • Para: {ord.customerName}</Text>
-                    </View>
-                    <Text style={styles.orderAdminEarnings}>{formatCurrency(ord.totalEarnings)}</Text>
-                  </View>
-
-                  <View style={styles.orderAdminBody}>
-                    <Text style={styles.orderRouteText}>📍 Destino: {ord.customerAddress}</Text>
-                    {ord.items && ord.items.length > 0 && (
-                      <Text style={styles.orderItemsText}>
-                        🛍️ {ord.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')}
-                      </Text>
-                    )}
-
-                    <View style={styles.assignPickerBox}>
-                      <Text style={styles.assignPickerLabel}>👉 Asignar a Repartidor:</Text>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
-                        {allFleetWorkers.map((cw) => (
-                          <TouchableOpacity
-                            key={cw.id}
-                            style={styles.assignCourierBtn}
-                            onPress={() => {
-                              assignOrderToCoworker(ord.id, cw.id);
-                              Alert.alert('¡Domicilio Asignado!', `El pedido ${ord.orderCode} fue asignado a ${cw.name}.`);
-                            }}
-                            activeOpacity={0.8}
-                          >
-                            <Text style={{ fontSize: 13 }}>{cw.vehicle === 'moto' ? '🏍️' : '🚲'}</Text>
-                            <Text style={styles.assignCourierBtnText}>{cw.nickname}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  </View>
-                </View>
-              ))
-            )}
-          </View>
-
-          {/* SECCIÓN 2: PEDIDOS ASIGNADOS Y EN CURSO / HISTORIAL */}
-          <Text style={[styles.tabSectionTitle, { marginTop: 18 }]}>
-            📦 Pedidos Asignados & En Ruta ({allOrders.length - pendingOrders.length})
-          </Text>
-
-          {allOrders
-            .filter((o) => o.status !== 'pendiente')
-            .map((ord) => {
-              const isFinished = ord.status === 'entregado';
-              const assignedWorker = allFleetWorkers.find((w) => w.id === ord.assignedWorkerId);
-
-              return (
-                <View key={ord.id} style={styles.orderAdminCard}>
-                  <View style={styles.orderAdminHeader}>
-                    <View style={styles.storeEmojiBox}>
-                      <Text style={{ fontSize: 18 }}>{ord.store?.logo || '📦'}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.orderAdminStore}>{ord.store?.name || 'Comercio'}</Text>
-                      <Text style={styles.orderAdminCode}>{ord.orderCode} • Para: {ord.customerName}</Text>
-                    </View>
-                    <Text style={styles.orderAdminEarnings}>{formatCurrency(ord.totalEarnings)}</Text>
-                  </View>
-
-                  <View style={styles.orderAdminBody}>
-                    <View style={styles.rowBetween}>
-                      <Text style={styles.orderRouteText}>Destino: {ord.customerAddress}</Text>
-                      <View style={[styles.orderStatusPill, isFinished ? styles.pillDone : styles.pillLive]}>
-                        <Text style={styles.orderStatusPillText}>{ord.status.replace('_', ' ').toUpperCase()}</Text>
-                      </View>
-                    </View>
-
-                    {assignedWorker && (
-                      <Text style={styles.assignedToText}>
-                        👤 Asignado a: <Text style={{ color: '#00E676', fontWeight: '800' }}>{assignedWorker.name}</Text>
-                      </Text>
-                    )}
-
-                    {!isFinished && (
-                      <View style={styles.reassignRow}>
-                        <Text style={styles.reassignLabel}>Reasignar a otro courier:</Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
-                          {allFleetWorkers.map((cw) => (
-                            <TouchableOpacity
-                              key={cw.id}
-                              style={styles.reassignChip}
-                              onPress={() => {
-                                assignOrderToCoworker(ord.id, cw.id);
-                                Alert.alert('Reasignación', `Orden transferida a ${cw.name}`);
-                              }}
-                            >
-                              <Text style={styles.reassignChipText}>Asignar a {cw.nickname}</Text>
-                            </TouchableOpacity>
-                          ))}
-                        </ScrollView>
-                      </View>
-                    )}
-                  </View>
-                </View>
-              );
-            })}
-        </ScrollView>
-      )}
-
-      {/* TAB 6: BROADCAST */}
-      {activeTab === 'broadcast' && (
-        <View style={styles.broadcastContainer}>
-          <View style={styles.broadcastCard}>
-            <View style={styles.broadcastHeader}>
-              <View style={styles.megaphoneCircle}>
-                <Ionicons name="megaphone" size={24} color="#FF441F" />
-              </View>
-              <View>
-                <Text style={styles.broadcastTitle}>Emisión Central de Comunicados</Text>
-                <Text style={styles.broadcastSub}>
-                  Alerta masiva para todos los repartidores activos.
-                </Text>
-              </View>
-            </View>
-
-            <TextInput
-              style={styles.broadcastInput}
-              placeholder="Escribe la directriz o aviso para la flota..."
-              placeholderTextColor="#8B949E"
-              multiline
-              numberOfLines={4}
-              value={broadcastText}
-              onChangeText={setBroadcastText}
-            />
-
+          <View style={styles.urgentActions}>
             <TouchableOpacity
-              style={[styles.sendBroadcastBtn, !broadcastText.trim() && styles.sendBroadcastBtnDisabled]}
-              onPress={() => handleBroadcast()}
-              disabled={!broadcastText.trim()}
-              activeOpacity={0.85}
+              style={styles.urgentBtnPrimary}
+              onPress={() => Alert.alert('Empaque', 'Instrucciones enviadas al módulo de boticaria.')}
             >
-              <Ionicons name="send" size={18} color="#FFFFFF" />
-              <Text style={styles.sendBroadcastText}>Enviar Comunicado Masivo</Text>
+              <Text style={styles.urgentBtnPrimaryText}>Atender Empaque</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.urgentBtnSecondary}
+              onPress={() => Alert.alert('Guía', 'Protocolo: envolver frascos ámbar en triple capa de lino.')}
+            >
+              <Text style={styles.urgentBtnSecondaryText}>Instrucciones</Text>
             </TouchableOpacity>
           </View>
         </View>
-      )}
 
-      {/* EDIT STORE & PRODUCTS MODAL */}
-      {selectedStore && (
-        <Modal visible={editStoreModal} transparent animationType="slide">
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalSheetLarge}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Editar Comercio & Catálogo</Text>
-                <TouchableOpacity onPress={() => setEditStoreModal(false)}>
-                  <Ionicons name="close" size={24} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
+        {/* Urgent Item 2 */}
+        <View style={styles.urgentCard}>
+          <View style={styles.urgentCardHeader}>
+            <Text style={[styles.urgentTag, { color: '#B45309' }]}>SATURACIÓN DE CABINAS</Text>
+            <Text style={styles.urgentSede}>85% Ocupación</Text>
+          </View>
+          <Text style={styles.urgentTitle}>
+            Sede Jardines cercana al límite de aromaterapia vespertina. 4 citas simultáneas en 30m.
+          </Text>
+          <View style={styles.urgentActions}>
+            <TouchableOpacity
+              style={styles.urgentBtnPrimary}
+              onPress={() => Alert.alert('Derivar', 'Flujo derivado a Sede Providencia para envíos express.')}
+            >
+              <Text style={styles.urgentBtnPrimaryText}>Derivar Flujo</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.urgentBtnSecondary}
+              onPress={() => Alert.alert('Agenda', 'Consultando turnos de boticarias y terapeutas.')}
+            >
+              <Text style={styles.urgentBtnSecondaryText}>Ver Agenda</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
 
-              <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
-                <Text style={styles.fieldLabel}>Nombre de la Tienda:</Text>
-                <TextInput style={styles.inputDark} value={editStoreName} onChangeText={setEditStoreName} />
+      {/* Flujo en Vivo */}
+      <View style={styles.liveFlowSection}>
+        <View style={styles.liveFlowHeader}>
+          <Text style={styles.sectionTitle}>Flujo en Vivo</Text>
+          <Text style={styles.updatedText}>Actualizado en tiempo real</Text>
+        </View>
 
-                <Text style={styles.fieldLabel}>Dirección:</Text>
-                <TextInput style={styles.inputDark} value={editStoreAddress} onChangeText={setEditStoreAddress} />
+        {/* Filter Pills */}
+        <View style={styles.filterTabsRow}>
+          {[
+            { id: 'todos', label: 'Todos (38)' },
+            { id: 'botica', label: 'En Botica (14)' },
+            { id: 'ruta', label: 'En Ruta (19)' },
+            { id: 'alerta', label: 'En Alerta (5)' },
+          ].map((tab) => (
+            <TouchableOpacity
+              key={tab.id}
+              style={[styles.filterTabPill, flowFilter === tab.id && styles.filterTabPillActive]}
+              onPress={() => setFlowFilter(tab.id as any)}
+            >
+              <Text style={[styles.filterTabPillText, flowFilter === tab.id && styles.filterTabPillTextActive]}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-                <Text style={styles.fieldLabel}>Bono Especial al Domiciliario (COP):</Text>
-                <TextInput style={styles.inputDark} value={editStoreBonus} onChangeText={setEditStoreBonus} keyboardType="numeric" />
-
-                <View style={styles.rowBetween}>
-                  <View style={{ flex: 1, marginRight: 8 }}>
-                    <Text style={styles.fieldLabel}>Latitud:</Text>
-                    <TextInput style={styles.inputDark} value={editStoreLat} onChangeText={setEditStoreLat} keyboardType="numeric" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.fieldLabel}>Longitud:</Text>
-                    <TextInput style={styles.inputDark} value={editStoreLng} onChangeText={setEditStoreLng} keyboardType="numeric" />
-                  </View>
-                </View>
-
-                {/* Products section */}
-                <View style={styles.productsManagerSection}>
-                  <View style={styles.rowBetween}>
-                    <Text style={styles.sectionSubHeading}>Productos en Venta ({selectedStore.products?.length || 0}):</Text>
-                    <TouchableOpacity
-                      style={styles.addProdMiniBtn}
-                      onPress={() => setShowAddProdModal(true)}
-                    >
-                      <Ionicons name="add" size={16} color="#FFFFFF" />
-                      <Text style={styles.addProdMiniText}>+ Añadir Producto</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {selectedStore.products?.map((prod) => (
-                    <View key={prod.id} style={styles.prodManageRow}>
-                      <Text style={{ fontSize: 18, marginRight: 8 }}>{prod.emoji}</Text>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.prodManageName}>{prod.name}</Text>
-                        <Text style={styles.prodManagePrice}>{formatCurrency(prod.price)}</Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.deleteProdBtn}
-                        onPress={() => handleDeleteProduct(prod.id)}
-                      >
-                        <Ionicons name="trash-outline" size={16} color="#FF5252" />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
-              </ScrollView>
-
-              <View style={styles.modalFooterRow}>
-                <TouchableOpacity
-                  style={styles.cancelModalBtn}
-                  onPress={() => setEditStoreModal(false)}
-                >
-                  <Text style={styles.cancelModalText}>Cancelar</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.saveModalBtn}
-                  onPress={handleSaveStoreChanges}
-                >
-                  <Text style={styles.saveModalText}>Guardar Tienda</Text>
-                </TouchableOpacity>
-              </View>
+        {/* Orders list items */}
+        <View style={styles.flowCard}>
+          <View style={styles.flowCardHeader}>
+            <Text style={styles.flowOrderCode}>#AUR-8924 · Artesanal</Text>
+            <View style={styles.flowBadgeBotica}>
+              <Text style={styles.flowBadgeBoticaText}>En Alquimia · -6 min</Text>
             </View>
           </View>
-        </Modal>
-      )}
+          <Text style={styles.flowRoute}>Jardines → Polanco Residencial</Text>
+          <Text style={styles.flowProduct}>Kit Baño de Inmersión Botánica</Text>
+          <Text style={styles.flowWorker}>Boticaria Elena V. · Macerando esencias puras</Text>
+        </View>
 
-      {/* ADD PRODUCT MODAL */}
-      <Modal visible={showAddProdModal} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.addProdCard}>
-            <Text style={styles.modalTitle}>Nuevo Producto para {selectedStore?.name}</Text>
-            
-            <Text style={styles.fieldLabel}>Nombre del Producto:</Text>
-            <TextInput style={styles.inputDark} placeholder="Ej. Hamburguesa Doble Carne" placeholderTextColor="#888" value={newProdName} onChangeText={setNewProdName} />
-
-            <Text style={styles.fieldLabel}>Precio (COP):</Text>
-            <TextInput style={styles.inputDark} placeholder="25000" placeholderTextColor="#888" value={newProdPrice} onChangeText={setNewProdPrice} keyboardType="numeric" />
-
-            <Text style={styles.fieldLabel}>Emoji Ilustrativo:</Text>
-            <View style={styles.emojiPickerRow}>
-              {['🍔', '🍕', '🍣', '🍟', '🥤', '🍦', '💊', '🍎', '🥪', '☕'].map((em) => (
-                <TouchableOpacity
-                  key={em}
-                  style={[styles.emojiBtn, newProdEmoji === em && styles.emojiBtnActive]}
-                  onPress={() => setNewProdEmoji(em)}
-                >
-                  <Text style={{ fontSize: 20 }}>{em}</Text>
-                </TouchableOpacity>
-              ))}
+        <View style={styles.flowCard}>
+          <View style={styles.flowCardHeader}>
+            <Text style={styles.flowOrderCode}>#AUR-8921 · En Ruta</Text>
+            <View style={styles.flowBadgeRuta}>
+              <Text style={styles.flowBadgeRutaText}>8 min rest.</Text>
             </View>
+          </View>
+          <Text style={styles.flowRoute}>Providencia → Roma Norte (Ámsterdam 142)</Text>
+          <Text style={styles.flowProduct}>Elixir Lavanda & Bruma Facial</Text>
+          <Text style={styles.flowWorker}>
+            Embajador Mateo R. (Unidad #08) · Cofre térmico a 21°C verificado
+          </Text>
+        </View>
 
-            <Text style={styles.fieldLabel}>Descripción:</Text>
-            <TextInput style={styles.inputDark} placeholder="Ingredientes y notas..." placeholderTextColor="#888" value={newProdDesc} onChangeText={setNewProdDesc} />
+        <View style={styles.flowCard}>
+          <View style={styles.flowCardHeader}>
+            <Text style={styles.flowOrderCode}>#AUR-8927 · Despacho Local</Text>
+            <View style={styles.flowBadgeAlert}>
+              <Text style={styles.flowBadgeAlertText}>Atención Stock</Text>
+            </View>
+          </View>
+          <Text style={styles.flowRoute}>Sede Condesa</Text>
+          <Text style={styles.flowProduct}>Aceite esencial de Sándalo Silvestre (1 unidad restante)</Text>
+          <View style={styles.stockActionsRow}>
+            <TouchableOpacity
+              style={styles.stockActionBtn}
+              onPress={() => Alert.alert('Lote', 'Lote de reserva 884 autorizado.')}
+            >
+              <Text style={styles.stockActionBtnText}>Autorizar Lote</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.stockActionSecBtn}
+              onPress={() => Alert.alert('Posponer', 'Notificación enviada al cliente.')}
+            >
+              <Text style={styles.stockActionSecBtnText}>Posponer</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
 
-            <View style={styles.modalFooterRow}>
-              <TouchableOpacity
-                style={styles.cancelModalBtn}
-                onPress={() => setShowAddProdModal(false)}
-              >
-                <Text style={styles.cancelModalText}>Cancelar</Text>
-              </TouchableOpacity>
+      {/* Bottom Quick Action CTAs */}
+      <View style={styles.bottomQuickActions}>
+        <TouchableOpacity
+          style={styles.quickActionButton}
+          onPress={() => Alert.alert('Pedido Manual', 'Abriendo formulario de despacho exprés...')}
+        >
+          <Ionicons name="add-circle-outline" size={16} color={AURA_THEME.colors.forestDark} />
+          <Text style={styles.quickActionText}>Pedido Manual</Text>
+        </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.saveModalBtn}
-                onPress={handleAddProductToStore}
-              >
-                <Text style={styles.saveModalText}>Añadir al Menú</Text>
-              </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.quickActionButton}
+          onPress={() => Alert.alert('Ruta Express', 'Calculando rutas verdes optimizadas...')}
+        >
+          <Ionicons name="bicycle-outline" size={16} color={AURA_THEME.colors.forestDark} />
+          <Text style={styles.quickActionText}>Ruta Express</Text>
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
+
+  // 2. TAB SEDES & STOCK (Page 9)
+  const renderSedesStockTab = () => (
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <View style={styles.sectionHeaderRow}>
+        <View>
+          <Text style={styles.pageTitle}>Sedes y Stock</Text>
+          <Text style={styles.pageSubtitle}>Monitoreo de inventario botánico y capacidad de boticas</Text>
+        </View>
+        <View style={styles.topActionsRow}>
+          <TouchableOpacity
+            style={styles.smallActionBtn}
+            onPress={() => Alert.alert('Lote', 'Escáner QR / Barcode activo para recepción de lotes.')}
+          >
+            <Ionicons name="qr-code-outline" size={14} color={AURA_THEME.colors.forestDark} />
+            <Text style={styles.smallActionText}>Escanear Lote</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Sede selector filter */}
+      <View style={styles.stockFiltersRow}>
+        {[
+          { id: 'todas', label: 'Todas (Consolidado)' },
+          { id: 'jardines', label: 'Sede Jardines' },
+          { id: 'providencia', label: 'Sede Providencia' },
+        ].map((tab) => (
+          <TouchableOpacity
+            key={tab.id}
+            style={[styles.stockPill, stockSedeFilter === tab.id && styles.stockPillActive]}
+            onPress={() => setStockSedeFilter(tab.id as any)}
+          >
+            <Text style={[styles.stockPillText, stockSedeFilter === tab.id && styles.stockPillTextActive]}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Inventario Crítico Card */}
+      <View style={styles.stockAlertCard}>
+        <View style={styles.stockAlertHeader}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Ionicons name="alert-circle" size={18} color={AURA_THEME.colors.terracotta} />
+            <Text style={styles.stockAlertTitle}>Inventario Crítico</Text>
+          </View>
+          <View style={styles.criticalCountBadge}>
+            <Text style={styles.criticalCountText}>4 Alertas Hoy</Text>
+          </View>
+        </View>
+        <Text style={styles.stockAlertSub}>
+          Se identificaron umbrales bajo reserva mínima. Requiere reposición antes del servicio vespertino.
+        </Text>
+
+        {/* Item 1 */}
+        <View style={styles.criticalItemRow}>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.criticalItemName}>Aceite Lavanda & Cedro</Text>
+              <View style={styles.urgentRedBadge}>
+                <Text style={styles.urgentRedBadgeText}>Urgente</Text>
+              </View>
+            </View>
+            <Text style={styles.criticalItemSub}>
+              Sede Jardines · 4 uds (Mín: 10) · Central tiene 84 uds disponibles
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.transferStockBtn}
+            onPress={() => Alert.alert('Transferencia', 'Solicitud enviada a Almacén Central para 12 unidades.')}
+          >
+            <Text style={styles.transferStockBtnText}>Pedir Transferencia</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Item 2 */}
+        <View style={styles.criticalItemRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.criticalItemName}>Vela Cera Soja & Bergamota</Text>
+            <Text style={styles.criticalItemSub}>Condesa Boutique · 2 uds (Mín: 6)</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.transferStockBtn}
+            onPress={() => Alert.alert('Transferencia', 'Orden de reposición creada.')}
+          >
+            <Text style={styles.transferStockBtnText}>Pedir</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Item 3 */}
+        <View style={styles.criticalItemRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.criticalItemName}>Kit Ritual Nocturno</Text>
+            <Text style={styles.criticalItemSub}>Sede Providencia · 3 uds (Mín: 8)</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.transferStockBtn}
+            onPress={() => Alert.alert('Transferencia', 'Orden de reposición creada.')}
+          >
+            <Text style={styles.transferStockBtnText}>Pedir</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Salud y Capacidad de Sedes */}
+      <View style={styles.sedesCapacityCard}>
+        <View style={styles.sedesCapacityHeader}>
+          <Text style={styles.sectionTitle}>Capacidad & Recursos</Text>
+          <Text style={styles.sedesCapacitySub}>3 activas</Text>
+        </View>
+
+        {/* Sede 1 */}
+        <View style={styles.sedeHealthItem}>
+          <View style={styles.sedeHealthTop}>
+            <Text style={styles.sedeHealthName}>Jardines del Valle</Text>
+            <View style={styles.loadBadgeHigh}>
+              <Text style={styles.loadBadgeHighText}>Carga 85% (Alta)</Text>
+            </View>
+          </View>
+          <Text style={styles.sedeHealthDetail}>
+            8 boticarias operando · 4 eco-bikes en turno · Stock General 94%
+          </Text>
+        </View>
+
+        {/* Sede 2 */}
+        <View style={styles.sedeHealthItem}>
+          <View style={styles.sedeHealthTop}>
+            <Text style={styles.sedeHealthName}>Providencia (Santuario Botánico)</Text>
+            <View style={styles.loadBadgeOpt}>
+              <Text style={styles.loadBadgeOptText}>Carga 60% (Óptima)</Text>
+            </View>
+          </View>
+          <Text style={styles.sedeHealthDetail}>
+            3 boticarias en turno · 6 eco-bikes operando · Stock General 88%
+          </Text>
+        </View>
+
+        {/* Sede 3 */}
+        <View style={styles.sedeHealthItem}>
+          <View style={styles.sedeHealthTop}>
+            <Text style={styles.sedeHealthName}>Condesa Boutique (Apothecary Bar)</Text>
+            <View style={styles.loadBadgeNormal}>
+              <Text style={styles.loadBadgeNormalText}>Carga 42% (Normal)</Text>
+            </View>
+          </View>
+          <Text style={styles.sedeHealthDetail}>
+            2 boticarias en turno · 5 eco-bikes operando · Stock General 91%
+          </Text>
+        </View>
+      </View>
+
+      {/* Transferencias Activas */}
+      <View style={styles.transferCard}>
+        <Text style={styles.sectionTitle}>Transferencias Activas (1 en curso)</Text>
+        <View style={styles.transferItem}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+            <Text style={styles.transferUnit}>Eco-Bike #04 · Mensajero Mateo Silva</Text>
+            <Text style={styles.transferEta}>18 min estimados</Text>
+          </View>
+          <Text style={styles.transferContent}>
+            25 Goteros Caléndula Orgánica & Bruma (Lote #884)
+          </Text>
+          <Text style={styles.transferRoute}>Almacén Central → Sede Jardines</Text>
+        </View>
+      </View>
+
+      {/* Sustentabilidad Activa - Retorno de Vidrio */}
+      <View style={styles.circularCard}>
+        <View style={styles.circularHeader}>
+          <MaterialCommunityIcons name="recycle" size={22} color={AURA_THEME.colors.forestDark} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.circularTitle}>Economía Circular: Retorno de Vidrio</Text>
+            <Text style={styles.circularSub}>
+              Frascos de botica devueltos por miembros del club y reacondicionados con vaporización biológica.
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.circularStatsRow}>
+          <View style={styles.circularStatCol}>
+            <Text style={styles.circularStatNum}>1,240</Text>
+            <Text style={styles.circularStatLabel}>Frascos Recolectados</Text>
+            <Text style={styles.circularStatSub}>+14% vs meta mensual</Text>
+          </View>
+          <View style={styles.circularDivider} />
+          <View style={styles.circularStatCol}>
+            <Text style={styles.circularStatNum}>480</Text>
+            <Text style={styles.circularStatLabel}>Esterilizados / Listos</Text>
+            <Text style={styles.circularStatSub}>Recarga inmediata</Text>
+          </View>
+          <View style={styles.circularDivider} />
+          <View style={styles.circularStatCol}>
+            <Text style={[styles.circularStatNum, { color: AURA_THEME.colors.statusGreen }]}>216 kg</Text>
+            <Text style={styles.circularStatLabel}>CO₂ Evitados</Text>
+            <Text style={styles.circularStatSub}>Impacto positivo</Text>
+          </View>
+        </View>
+      </View>
+    </ScrollView>
+  );
+
+  // 3. TAB FLOTA (Page 4)
+  const renderFlotaTab = () => (
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      {/* Fleet Hero Banner */}
+      <View style={styles.fleetHero}>
+        <View style={styles.fleetHeroTop}>
+          <View style={styles.onlineFleetPill}>
+            <View style={styles.greenPulseDot} />
+            <Text style={styles.onlineFleetText}>16/20 En Línea</Text>
+          </View>
+          <View style={styles.co2SavedPill}>
+            <Ionicons name="leaf" size={12} color={AURA_THEME.colors.forestDark} />
+            <Text style={styles.co2SavedText}>42.8 kg CO₂ Evitado</Text>
+          </View>
+        </View>
+
+        <Text style={styles.fleetHeroTitle}>FLOTA BOTÁNICA ACTIVA</Text>
+        <Text style={styles.fleetHeroSub}>
+          Rutas Verdes & Tráfico Suave • 3 Sedes · 14 Embajadores · Monitoreo GPS HD
+        </Text>
+
+        <View style={styles.fleetMetricsRow}>
+          <View style={styles.fleetMetricBox}>
+            <Text style={styles.fleetMetricVal}>14</Text>
+            <Text style={styles.fleetMetricLabel}>En Ruta</Text>
+          </View>
+          <View style={styles.fleetMetricBox}>
+            <Text style={styles.fleetMetricVal}>2</Text>
+            <Text style={styles.fleetMetricLabel}>En Sede</Text>
+          </View>
+          <View style={styles.fleetMetricBox}>
+            <Text style={styles.fleetMetricVal}>4</Text>
+            <Text style={styles.fleetMetricLabel}>Pausa</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Fleet Filter Tabs */}
+      <View style={styles.fleetFiltersRow}>
+        {[
+          { id: 'todos', label: 'Todos (20)' },
+          { id: 'ruta', label: 'En Ruta (14)' },
+          { id: 'sede', label: 'En Sede (2)' },
+          { id: 'pausa', label: 'Pausa (4)' },
+        ].map((tab) => (
+          <TouchableOpacity
+            key={tab.id}
+            style={[styles.fleetFilterPill, fleetFilter === tab.id && styles.fleetFilterPillActive]}
+            onPress={() => setFleetFilter(tab.id as any)}
+          >
+            <Text style={[styles.fleetFilterText, fleetFilter === tab.id && styles.fleetFilterTextActive]}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Couriers Cards matching Page 4 */}
+      {/* Courier 1 */}
+      <View style={styles.courierCard}>
+        <View style={styles.courierCardHeader}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={styles.courierName}>Mateo R.</Text>
+            <View style={styles.lotoBadgeMini}>
+              <Text style={styles.lotoBadgeMiniText}>Loto Oro</Text>
+            </View>
+            <Text style={styles.courierRating}>★ 4.98</Text>
+          </View>
+          <View style={styles.batteryPill}>
+            <Ionicons name="battery-charging" size={13} color={AURA_THEME.colors.statusGreen} />
+            <Text style={styles.batteryText}>84%</Text>
+          </View>
+        </View>
+
+        <Text style={styles.courierVehicleLine}>Eco-Bike #08 · Baúl: 21.2°C (Óptimo)</Text>
+        <Text style={styles.courierOrderInfo}>
+          Polanco V Secc · Pedido #AUR-8921 · 8 min rest. · Aceites Esenciales
+        </Text>
+
+        <View style={styles.courierCardActions}>
+          <TouchableOpacity
+            style={styles.courierCardBtn}
+            onPress={() => Alert.alert('Llamada', 'Conectando con Mateo Silva...')}
+          >
+            <Ionicons name="call" size={13} color={AURA_THEME.colors.forestDark} />
+            <Text style={styles.courierCardBtnText}>Llamar</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.courierCardBtn}
+            onPress={() => Alert.alert('Mapa', 'Ruta GPS de Mateo Silva activa sobre Horacio y Polanco.')}
+          >
+            <Ionicons name="map" size={13} color={AURA_THEME.colors.forestDark} />
+            <Text style={styles.courierCardBtnText}>Ver en Mapa</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Courier 2 */}
+      <View style={styles.courierCard}>
+        <View style={styles.courierCardHeader}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={styles.courierName}>Carlos M.</Text>
+            <View style={styles.lotoBadgeMini}>
+              <Text style={styles.lotoBadgeMiniText}>Loto Oro</Text>
+            </View>
+            <Text style={styles.courierRating}>★ 4.95</Text>
+          </View>
+          <View style={[styles.batteryPill, { backgroundColor: '#FEF3C7' }]}>
+            <Ionicons name="battery-half" size={13} color="#D97706" />
+            <Text style={[styles.batteryText, { color: '#D97706' }]}>45% (Baja)</Text>
+          </View>
+        </View>
+
+        <Text style={styles.courierVehicleLine}>Eco-Bike #12 · Baúl: 20.8°C (Estable)</Text>
+        <Text style={styles.courierOrderInfo}>
+          San Ángel · Pedido #AUR-8919 · 16 min rest. · Velas de Cera
+        </Text>
+
+        <View style={styles.courierCardActions}>
+          <TouchableOpacity
+            style={styles.courierCardBtn}
+            onPress={() => Alert.alert('Llamada', 'Conectando con Carlos M...')}
+          >
+            <Ionicons name="call" size={13} color={AURA_THEME.colors.forestDark} />
+            <Text style={styles.courierCardBtnText}>Llamar</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.courierCardBtn}
+            onPress={() => Alert.alert('Mapa', 'Ruta GPS de Carlos M. activa.')}
+          >
+            <Ionicons name="map" size={13} color={AURA_THEME.colors.forestDark} />
+            <Text style={styles.courierCardBtnText}>Ver en Mapa</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Courier 3 */}
+      <View style={styles.courierCard}>
+        <View style={styles.courierCardHeader}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={styles.courierName}>Sofía T.</Text>
+            <View style={styles.availableBadgeMini}>
+              <Text style={styles.availableBadgeMiniText}>Disponible</Text>
+            </View>
+            <Text style={styles.courierRating}>★ 5.0</Text>
+          </View>
+          <View style={styles.batteryPill}>
+            <Ionicons name="battery-full" size={13} color={AURA_THEME.colors.statusGreen} />
+            <Text style={styles.batteryText}>92%</Text>
+          </View>
+        </View>
+
+        <Text style={styles.courierVehicleLine}>Eco-Bike #03 · Sede Jardines del Valle</Text>
+        <Text style={styles.courierOrderInfo}>
+          En reposo botánico. Lista para asignación inmediata.
+        </Text>
+      </View>
+    </ScrollView>
+  );
+
+  // 4. TAB MÉTRICAS & FINANZAS (Page 1)
+  const renderMetricasTab = () => (
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      {/* Header and filters */}
+      <View style={styles.metricasTopHeader}>
+        <View>
+          <Text style={styles.pageTitle}>PANEL EJECUTIVO</Text>
+          <Text style={styles.pageSubtitle}>Métricas & Finanzas</Text>
+        </View>
+        <View style={styles.auditPill}>
+          <Text style={styles.auditPillText}>Auditoría 21:00</Text>
+        </View>
+      </View>
+
+      <View style={styles.periodPillsRow}>
+        {[
+          { id: 'hoy', label: 'Hoy' },
+          { id: 'semana', label: 'Esta Semana' },
+          { id: 'mes', label: 'Últimos 30 días' },
+        ].map((p) => (
+          <TouchableOpacity
+            key={p.id}
+            style={[styles.periodPill, periodFilter === p.id && styles.periodPillActive]}
+            onPress={() => setPeriodFilter(p.id as any)}
+          >
+            <Text style={[styles.periodPillText, periodFilter === p.id && styles.periodPillTextActive]}>
+              {p.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Facturación Neta Hoy Card */}
+      <View style={styles.revenueCard}>
+        <Text style={styles.revenueLabel}>FACTURACIÓN NETA HOY</Text>
+        <View style={styles.revenueAmountRow}>
+          <Text style={styles.revenueAmount}>$28,450.00</Text>
+          <Text style={styles.revenueCurrency}>MXN</Text>
+          <View style={styles.plusPercentPill}>
+            <Text style={styles.plusPercentText}>+18.4%</Text>
+          </View>
+        </View>
+        <Text style={styles.revenueCompared}>
+          Superando promedio histórico por $4,420 MXN
+        </Text>
+
+        <View style={styles.revenueStatsRow}>
+          <View style={styles.revenueStatCol}>
+            <Text style={styles.revStatTitle}>Pedidos Completados</Text>
+            <Text style={styles.revStatVal}>115 órdenes</Text>
+            <Text style={styles.revStatSub}>Ticket: $247.40 MXN</Text>
+          </View>
+          <View style={styles.revStatDivider} />
+          <View style={styles.revenueStatCol}>
+            <Text style={styles.revStatTitle}>Cumplimiento en Tiempo</Text>
+            <Text style={[styles.revStatVal, { color: AURA_THEME.colors.statusGreen }]}>99.4%</Text>
+            <Text style={styles.revStatSub}>Meta operativa: &gt;98%</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Ventas por Santuario */}
+      <View style={styles.salesBySantuarioCard}>
+        <View style={styles.cardHeaderBetween}>
+          <Text style={styles.sectionTitle}>Ventas por Santuario</Text>
+          <Text style={styles.sanctuariesActiveCount}>3 SEDES ACTIVAS</Text>
+        </View>
+
+        <View style={styles.sanctuaryBarRow}>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
+              <Text style={styles.sancName}>Jardines del Valle</Text>
+              <Text style={styles.sancVal}>$12,800 MXN (45%)</Text>
+            </View>
+            <View style={styles.barTrack}>
+              <View style={[styles.barProg, { width: '45%', backgroundColor: AURA_THEME.colors.forestDark }]} />
             </View>
           </View>
         </View>
-      </Modal>
 
-      {/* Worker Telemetry Modal */}
-      {selectedWorker && (
-        <Modal visible={!!selectedWorker} transparent animationType="slide">
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalSheet}>
-              <View style={styles.modalHeader}>
-                <View style={styles.rowCenter}>
-                  <Text style={{ fontSize: 26, marginRight: 8 }}>{selectedWorker.vehicle === 'moto' ? '🏍️' : '🚲'}</Text>
-                  <View>
-                    <Text style={styles.modalWorkerName}>{selectedWorker.name}</Text>
-                    <Text style={styles.modalWorkerSub}>"{selectedWorker.nickname}" • {selectedWorker.vehicleModel}</Text>
-                  </View>
-                </View>
-                <TouchableOpacity onPress={() => setSelectedWorkerId(null)}>
-                  <Ionicons name="close" size={22} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.telemetryGrid}>
-                <View style={styles.telemetryBox}>
-                  <Text style={styles.telemetryLabel}>Batería GPS</Text>
-                  <Text style={styles.telemetryVal}>{selectedWorker.batteryLevel}%</Text>
-                </View>
-                <View style={styles.telemetryBox}>
-                  <Text style={styles.telemetryLabel}>Calificación</Text>
-                  <Text style={styles.telemetryVal}>⭐ {selectedWorker.rating}</Text>
-                </View>
-                <View style={styles.telemetryBox}>
-                  <Text style={styles.telemetryLabel}>Entregas Hoy</Text>
-                  <Text style={styles.telemetryVal}>{selectedWorker.completedOrdersToday}</Text>
-                </View>
-              </View>
-
-              <Text style={styles.actionsModalTitle}>Cambiar Estado Operativo:</Text>
-              <View style={styles.statusChangeRow}>
-                {(['disponible', 'en_ruta', 'en_tienda', 'descanso'] as const).map((st) => (
-                  <TouchableOpacity
-                    key={st}
-                    style={[styles.statusToggleBtn, selectedWorker.status === st && styles.statusToggleBtnActive]}
-                    onPress={() => {
-                      updateCoworkerStatus(selectedWorker.id, st);
-                      setSelectedWorkerId(null);
-                    }}
-                  >
-                    <Text style={styles.statusToggleText}>{st.replace('_', ' ').toUpperCase()}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+        <View style={styles.sanctuaryBarRow}>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
+              <Text style={styles.sancName}>Providencia</Text>
+              <Text style={styles.sancVal}>$9,960 MXN (35%)</Text>
+            </View>
+            <View style={styles.barTrack}>
+              <View style={[styles.barProg, { width: '35%', backgroundColor: AURA_THEME.colors.forestMedium }]} />
             </View>
           </View>
-        </Modal>
-      )}
+        </View>
+
+        <View style={styles.sanctuaryBarRow}>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
+              <Text style={styles.sancName}>Condesa Boutique</Text>
+              <Text style={styles.sancVal}>$5,690 MXN (20%)</Text>
+            </View>
+            <View style={styles.barTrack}>
+              <View style={[styles.barProg, { width: '20%', backgroundColor: AURA_THEME.colors.terracotta }]} />
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {/* Curva Horaria */}
+      <View style={styles.hourlyCard}>
+        <View style={styles.cardHeaderBetween}>
+          <View>
+            <Text style={styles.hourlyLabel}>CURVA HORARIA</Text>
+            <Text style={styles.sectionTitle}>Ritmo de Ventas</Text>
+          </View>
+          <View style={styles.peakBadge}>
+            <Text style={styles.peakBadgeText}>Pico 17:00 - 21:00 Vespertino</Text>
+          </View>
+        </View>
+        <Text style={styles.hourlyDesc}>
+          Incremento exponencial en despachos de aromaterapia nocturna y rituales de relajación previa al descanso.
+        </Text>
+
+        <View style={styles.hourlyTimelineRow}>
+          {['10:00', '13:00', '16:00', '19:00 (Zen Peak)', '21:30'].map((hour, idx) => (
+            <View key={idx} style={styles.timelineItem}>
+              <View style={[styles.timelineDot, idx === 3 && styles.timelineDotPeak]} />
+              <Text style={[styles.timelineText, idx === 3 && styles.timelineTextPeak]}>{hour}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      {/* Top 3 Fórmulas Botánicas Destacadas */}
+      <View style={styles.topFormulasCard}>
+        <View style={styles.cardHeaderBetween}>
+          <Text style={styles.sectionTitle}>Fórmulas Botánicas Destacadas</Text>
+          <Text style={styles.topTag}>TOP 3 DEL DÍA</Text>
+        </View>
+
+        {/* 1 */}
+        <View style={styles.formulaRankItem}>
+          <View style={styles.rankBadgeFirst}>
+            <Text style={styles.rankNum}>1</Text>
+          </View>
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={styles.formulaRankName}>Aceite Lavanda & Cedro</Text>
+            <Text style={styles.formulaRankSub}>38 unidades despachadas · 32% del catálogo</Text>
+          </View>
+          <Text style={styles.formulaRankPrice}>$9,120 MXN</Text>
+        </View>
+
+        {/* 2 */}
+        <View style={styles.formulaRankItem}>
+          <View style={styles.rankBadge}>
+            <Text style={styles.rankNum}>2</Text>
+          </View>
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={styles.formulaRankName}>Vela Soja & Bergamota</Text>
+            <Text style={styles.formulaRankSub}>29 unidades despachadas · Stock óptimo</Text>
+          </View>
+          <Text style={styles.formulaRankPrice}>$5,655 MXN</Text>
+        </View>
+
+        {/* 3 */}
+        <View style={styles.formulaRankItem}>
+          <View style={styles.rankBadge}>
+            <Text style={styles.rankNum}>3</Text>
+          </View>
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={styles.formulaRankName}>Bruma Romero Silvestre</Text>
+            <Text style={styles.formulaRankSub}>24 unidades despachadas · Alta rotación</Text>
+          </View>
+          <Text style={styles.formulaRankPrice}>$3,960 MXN</Text>
+        </View>
+      </View>
+
+      {/* Compensación & Huella Verde */}
+      <View style={styles.compensationCard}>
+        <View style={styles.cardHeaderBetween}>
+          <Text style={styles.sectionTitle}>Compensación & Huella Verde</Text>
+          <Text style={styles.liquidatedTag}>Liquidado Hoy</Text>
+        </View>
+
+        <View style={styles.compRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.compLabel}>Embajadores & Reparto</Text>
+            <Text style={styles.compSub}>100% dispersión automática al día</Text>
+          </View>
+          <Text style={styles.compAmount}>$6,540 MXN</Text>
+        </View>
+
+        <View style={styles.compRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.compLabel}>Propinas Directas Integradas</Text>
+            <Text style={styles.compSub}>Sin comisiones intermediarias</Text>
+          </View>
+          <Text style={styles.compAmount}>$1,420 MXN</Text>
+        </View>
+
+        <View style={styles.compRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.compLabel}>Retorno de Envases de Vidrio</Text>
+            <Text style={styles.compSub}>48 botellas devueltas en circuito</Text>
+          </View>
+          <Text style={[styles.compAmount, { color: AURA_THEME.colors.statusGreen }]}>
+            $480 MXN
+          </Text>
+        </View>
+      </View>
+
+      {/* Share / Export Actions */}
+      <View style={styles.exportActionsRow}>
+        <TouchableOpacity
+          style={styles.exportBtn}
+          onPress={() => Alert.alert('Descarga', 'Generando reporte ejecutivo botánico en PDF...')}
+        >
+          <Ionicons name="document-text-outline" size={15} color={AURA_THEME.colors.forestDark} />
+          <Text style={styles.exportBtnText}>Descargar Resumen Ejecutivo PDF</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.shareBtn}
+          onPress={() => Alert.alert('Compartir', 'Enlace seguro generado para socios y junta directiva.')}
+        >
+          <Ionicons name="share-social-outline" size={15} color={AURA_THEME.colors.forestDark} />
+          <Text style={styles.shareBtnText}>Compartir con Socios</Text>
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
+
+  return (
+    <View style={styles.container}>
+      {activeCentralTab === 'operaciones' && renderOperacionesTab()}
+      {activeCentralTab === 'sedes_stock' && renderSedesStockTab()}
+      {activeCentralTab === 'flota' && renderFlotaTab()}
+      {activeCentralTab === 'metricas' && renderMetricasTab()}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0F1113' },
-  topKpiBar: {
-    flexDirection: 'row',
-    backgroundColor: '#181C21',
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#24282D',
-    gap: 6,
-  },
-  kpiCard: {
+  container: {
     flex: 1,
-    backgroundColor: '#1F242C',
-    borderRadius: 10,
-    paddingVertical: 6,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#292E36',
+    backgroundColor: AURA_THEME.colors.bgPrimary,
   },
-  kpiVal: { fontSize: 15, fontWeight: '900', color: '#FFFFFF' },
-  kpiLabel: { fontSize: 9, color: '#8B949E', marginTop: 1 },
-  subnav: {
-    backgroundColor: '#181C21',
-    borderBottomWidth: 1,
-    borderBottomColor: '#24282D',
+  scroll: {
+    flex: 1,
   },
-  subnavScroll: {
-    paddingHorizontal: 8,
-    gap: 6,
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 40,
   },
-  subnavItem: {
+  sectionTitle: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
+  },
+  topControlBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    gap: 6,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  subnavItemActive: { borderBottomColor: '#FF441F' },
-  subnavText: { fontSize: 11, fontWeight: '700', color: '#8B949E' },
-  subnavTextActive: { color: '#FFFFFF' },
-  mapContainer: { flex: 1, position: 'relative' },
-  simulateJitterBtn: {
-    position: 'absolute',
-    top: 14,
-    left: 14,
-    backgroundColor: 'rgba(26, 29, 32, 0.9)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: '#3F444E',
-    zIndex: 100,
-  },
-  simulateJitterText: { color: '#FFFFFF', fontSize: 11, fontWeight: '800' },
-  scrollSection: { flex: 1, paddingHorizontal: 14, paddingTop: 14 },
-  sectionHeaderRow: { marginBottom: 12 },
-  tabSectionTitle: { fontSize: 14, fontWeight: '800', color: '#FFFFFF', textTransform: 'uppercase' },
-  tabSectionSub: { fontSize: 11, color: '#8B949E', marginTop: 2, marginBottom: 14 },
-  adminStoreCard: {
-    backgroundColor: '#181C21',
-    borderRadius: 14,
+    backgroundColor: AURA_THEME.colors.surface,
+    borderRadius: AURA_THEME.borderRadius.lg,
     padding: 14,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderLight,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#292E36',
+    gap: 12,
   },
-  storeCardTop: { flexDirection: 'row', gap: 10, alignItems: 'center' },
-  storeIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: '#24282D',
-    alignItems: 'center',
-    justifyContent: 'center',
+  controlBannerTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
   },
-  storeNameText: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
-  storeAddressText: { fontSize: 11, color: '#D1D7E0', marginTop: 2 },
-  storeMetaText: { fontSize: 10, color: '#8B949E', marginTop: 2 },
-  tierTag: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  tierDiamond: { backgroundColor: '#00C853' },
-  tierGold: { backgroundColor: '#FF9100' },
-  tierTagText: { fontSize: 9, fontWeight: '900', color: '#FFF' },
-  productsMiniBox: {
-    marginTop: 10,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#24282D',
+  controlBannerSub: {
+    fontSize: 10.5,
+    color: AURA_THEME.colors.textMuted,
   },
-  productsTitle: { fontSize: 11, fontWeight: '700', color: '#8B949E' },
-  productChip: {
+  pauseOpsBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#222832',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginRight: 6,
-    gap: 4,
+    backgroundColor: AURA_THEME.colors.forestDark,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: AURA_THEME.borderRadius.sm,
+    gap: 5,
   },
-  productChipName: { fontSize: 10, color: '#FFF', fontWeight: '600' },
-  productChipPrice: { fontSize: 10, color: '#00C853', fontWeight: '800' },
-  noProdText: { fontSize: 11, color: '#666', fontStyle: 'italic' },
-  editStoreBtn: {
-    backgroundColor: '#2979FF',
+  pauseOpsBtnActive: {
+    backgroundColor: AURA_THEME.colors.terracotta,
+  },
+  pauseOpsBtnText: {
+    color: '#FFFFFF',
+    fontSize: 10.5,
+    fontWeight: '700',
+  },
+  metricsQuadRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 9,
-    borderRadius: 10,
-    gap: 6,
-    marginTop: 12,
+    gap: 8,
+    marginBottom: 14,
   },
-  editStoreBtnText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
-  starLocationCard: {
-    backgroundColor: '#181C21',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#292E36',
-  },
-  starCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  starBadgeBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#2B2515',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#FFB300',
-  },
-  starAddressTitle: { fontSize: 14, fontWeight: '800', color: '#FFF' },
-  starCoordsText: { fontSize: 10, color: '#8B949E', marginTop: 2 },
-  ratingPill: { backgroundColor: '#FFB300', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
-  ratingPillText: { fontSize: 10, fontWeight: '900', color: '#1A1D20' },
-  starNotesBox: {
-    backgroundColor: '#20242B',
-    borderRadius: 8,
-    padding: 10,
-    marginVertical: 10,
-  },
-  starNotesLabel: { fontSize: 10, fontWeight: '700', color: '#FFB300', marginBottom: 2 },
-  starNotesText: { fontSize: 12, color: '#D1D7E0', fontStyle: 'italic' },
-  starFooter: { flexDirection: 'row', justifyContent: 'space-between' },
-  starCreatorText: { fontSize: 10, color: '#8B949E' },
-  starDateText: { fontSize: 10, color: '#666' },
-  workersContainer: { flex: 1, paddingHorizontal: 14, paddingTop: 10 },
-  filterRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
-  filterChip: { backgroundColor: '#1F242C', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, borderWidth: 1, borderColor: '#292E36' },
-  filterChipActive: { backgroundColor: '#FF441F', borderColor: '#FF441F' },
-  filterChipText: { fontSize: 11, color: '#8B949E', fontWeight: '700' },
-  filterChipTextActive: { color: '#FFFFFF' },
-  workersScroll: { flex: 1 },
-  workerCard: { backgroundColor: '#181C21', borderRadius: 14, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: '#292E36' },
-  workerCardTop: { flexDirection: 'row', gap: 10, alignItems: 'center' },
-  workerAvatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#24282D', alignItems: 'center', justifyContent: 'center' },
-  workerDetails: { flex: 1 },
-  workerNameText: { fontSize: 14, fontWeight: '800', color: '#FFFFFF' },
-  statusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
-  statusBadgeText: { fontSize: 9, fontWeight: '900', color: '#FFFFFF' },
-  workerSub: { fontSize: 11, color: '#8B949E', marginTop: 2 },
-  workerCardMetrics: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: '#1F242C', padding: 8, borderRadius: 8, marginTop: 10 },
-  metricPair: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  metricValText: { fontSize: 11, color: '#D1D7E0', fontWeight: '700' },
-  workerActionBtn: { backgroundColor: '#24282D', paddingVertical: 8, borderRadius: 8, alignItems: 'center', marginTop: 10 },
-  workerActionBtnText: { color: '#FF441F', fontSize: 11, fontWeight: '800' },
-  ordersScroll: { flex: 1, paddingHorizontal: 14, paddingTop: 14 },
-  orderAdminCard: { backgroundColor: '#181C21', borderRadius: 14, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: '#292E36' },
-  orderAdminHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, borderBottomWidth: 1, borderBottomColor: '#24282D', paddingBottom: 8 },
-  storeEmojiBox: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#24282D', alignItems: 'center', justifyContent: 'center' },
-  orderAdminStore: { fontSize: 13, fontWeight: '800', color: '#FFFFFF' },
-  orderAdminCode: { fontSize: 11, color: '#8B949E' },
-  orderAdminEarnings: { fontSize: 15, fontWeight: '900', color: '#00C853' },
-  orderAdminBody: { paddingTop: 8 },
-  orderRouteText: { fontSize: 11, color: '#D1D7E0', flex: 1 },
-  orderStatusPill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
-  pillLive: { backgroundColor: '#2979FF' },
-  pillDone: { backgroundColor: '#00C853' },
-  orderStatusPillText: { fontSize: 9, fontWeight: '800', color: '#FFFFFF' },
-  reassignRow: { marginTop: 8, borderTopWidth: 1, borderTopColor: '#24282D', paddingTop: 6 },
-  reassignLabel: { fontSize: 10, color: '#8B949E', fontWeight: '700' },
-  reassignChip: { backgroundColor: '#24282D', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, marginRight: 6, borderWidth: 1, borderColor: '#333842' },
-  reassignChipText: { fontSize: 10, color: '#FF441F', fontWeight: '700' },
-  broadcastContainer: { flex: 1, paddingHorizontal: 14, paddingTop: 14 },
-  broadcastCard: { backgroundColor: '#181C21', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#292E36' },
-  broadcastHeader: { flexDirection: 'row', gap: 12, alignItems: 'center', marginBottom: 14 },
-  megaphoneCircle: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#24282D', alignItems: 'center', justifyContent: 'center' },
-  broadcastTitle: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
-  broadcastSub: { fontSize: 11, color: '#8B949E', marginTop: 2 },
-  broadcastInput: { backgroundColor: '#0F1113', borderRadius: 12, padding: 12, fontSize: 13, color: '#FFFFFF', borderWidth: 1, borderColor: '#292E36', textAlignVertical: 'top', minHeight: 90 },
-  sendBroadcastBtn: { backgroundColor: '#FF441F', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 12, gap: 8, marginTop: 12 },
-  sendBroadcastBtnDisabled: { backgroundColor: '#3F444E' },
-  sendBroadcastText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 16 },
-  modalSheetLarge: { backgroundColor: '#181C21', borderRadius: 20, padding: 20, width: '100%', maxWidth: 480, borderWidth: 1, borderColor: '#2E343E' },
-  modalSheet: { backgroundColor: '#181C21', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, width: '100%', borderTopWidth: 1, borderTopColor: '#2E343E' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  modalTitle: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
-  modalWorkerName: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
-  modalWorkerSub: { fontSize: 11, color: '#8B949E' },
-  rowCenter: { flexDirection: 'row', alignItems: 'center' },
-  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  telemetryGrid: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  telemetryBox: { flex: 1, backgroundColor: '#1F242C', padding: 10, borderRadius: 10, alignItems: 'center' },
-  telemetryLabel: { fontSize: 9, color: '#8B949E' },
-  telemetryVal: { fontSize: 14, fontWeight: '800', color: '#FFFFFF', marginTop: 2 },
-  actionsModalTitle: { fontSize: 12, fontWeight: '800', color: '#8B949E', marginBottom: 10 },
-  statusChangeRow: { flexDirection: 'row', gap: 6, marginBottom: 20 },
-  statusToggleBtn: { flex: 1, backgroundColor: '#24282D', paddingVertical: 8, borderRadius: 8, alignItems: 'center' },
-  statusToggleBtnActive: { backgroundColor: '#FF441F' },
-  statusToggleText: { fontSize: 9, fontWeight: '800', color: '#FFFFFF' },
-  fieldLabel: { fontSize: 11, fontWeight: '700', color: '#8B949E', marginTop: 10, marginBottom: 4, textTransform: 'uppercase' },
-  inputDark: { backgroundColor: '#0F1113', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, fontSize: 13, color: '#FFFFFF', borderWidth: 1, borderColor: '#2E343E' },
-  productsManagerSection: { marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#282E37' },
-  sectionSubHeading: { fontSize: 12, fontWeight: '800', color: '#FFFFFF' },
-  addProdMiniBtn: { backgroundColor: '#00C853', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, gap: 4 },
-  addProdMiniText: { color: '#FFF', fontSize: 11, fontWeight: '800' },
-  prodManageRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#222832', padding: 8, borderRadius: 8, marginTop: 6 },
-  prodManageName: { fontSize: 12, color: '#FFF', fontWeight: '700' },
-  prodManagePrice: { fontSize: 11, color: '#00C853', fontWeight: '800' },
-  deleteProdBtn: { padding: 6 },
-  modalFooterRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 16 },
-  cancelModalBtn: { paddingVertical: 8, paddingHorizontal: 14 },
-  cancelModalText: { color: '#8B949E', fontWeight: '700' },
-  saveModalBtn: { backgroundColor: '#FF441F', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 },
-  saveModalText: { color: '#FFFFFF', fontWeight: '800' },
-  addProdCard: { backgroundColor: '#181C21', borderRadius: 18, padding: 20, width: '100%', maxWidth: 420, borderWidth: 1, borderColor: '#2E343E' },
-  emojiPickerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 6 },
-  emojiBtn: { width: 34, height: 34, borderRadius: 8, backgroundColor: '#222832', alignItems: 'center', justifyContent: 'center' },
-  emojiBtnActive: { backgroundColor: '#FF441F' },
-  // Dispatch Mode Control Card
-  modeControlCard: {
-    backgroundColor: '#181C21',
-    marginHorizontal: 14,
-    marginTop: 8,
-    marginBottom: 6,
-    borderRadius: 12,
+  metricQuadCard: {
+    flex: 1,
+    backgroundColor: AURA_THEME.colors.surface,
+    borderRadius: AURA_THEME.borderRadius.md,
     padding: 10,
     borderWidth: 1,
-    borderColor: '#292E36',
+    borderColor: AURA_THEME.colors.borderLight,
   },
-  modeControlHeader: {
-    marginBottom: 8,
-  },
-  modeBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  metricQuadLabel: {
+    fontSize: 8.5,
+    fontWeight: '800',
+    color: AURA_THEME.colors.textMuted,
+    letterSpacing: 0.5,
     marginBottom: 2,
   },
-  modeStatusDot: {
+  metricQuadVal: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
+    marginBottom: 1,
+  },
+  metricQuadSub: {
+    fontSize: 8.5,
+    color: AURA_THEME.colors.textMuted,
+  },
+  attentionSection: {
+    marginBottom: 16,
+  },
+  attentionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  alertBadge: {
+    backgroundColor: '#FDE8E8',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  alertBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#C53030',
+  },
+  urgentCard: {
+    backgroundColor: AURA_THEME.colors.surface,
+    borderRadius: AURA_THEME.borderRadius.lg,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderLight,
+    marginBottom: 8,
+  },
+  urgentCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  urgentTag: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#C53030',
+    letterSpacing: 0.8,
+  },
+  urgentSede: {
+    fontSize: 10.5,
+    color: AURA_THEME.colors.textMuted,
+  },
+  urgentTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: AURA_THEME.colors.forestDark,
+    lineHeight: 16,
+    marginBottom: 8,
+  },
+  urgentActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  urgentBtnPrimary: {
+    backgroundColor: AURA_THEME.colors.forestDark,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: AURA_THEME.borderRadius.sm,
+  },
+  urgentBtnPrimaryText: {
+    color: '#FFFFFF',
+    fontSize: 10.5,
+    fontWeight: '700',
+  },
+  urgentBtnSecondary: {
+    backgroundColor: AURA_THEME.colors.surfaceSubtle,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderMedium,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: AURA_THEME.borderRadius.sm,
+  },
+  urgentBtnSecondaryText: {
+    color: AURA_THEME.colors.forestDark,
+    fontSize: 10.5,
+    fontWeight: '600',
+  },
+  liveFlowSection: {
+    marginBottom: 16,
+  },
+  liveFlowHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  updatedText: {
+    fontSize: 10.5,
+    color: AURA_THEME.colors.textMuted,
+  },
+  filterTabsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 10,
+  },
+  filterTabPill: {
+    backgroundColor: AURA_THEME.colors.surface,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: AURA_THEME.borderRadius.full,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderLight,
+  },
+  filterTabPillActive: {
+    backgroundColor: AURA_THEME.colors.forestDark,
+    borderColor: AURA_THEME.colors.forestDark,
+  },
+  filterTabPillText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: AURA_THEME.colors.textSecondary,
+  },
+  filterTabPillTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  flowCard: {
+    backgroundColor: AURA_THEME.colors.surface,
+    borderRadius: AURA_THEME.borderRadius.lg,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderLight,
+    marginBottom: 8,
+  },
+  flowCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 3,
+  },
+  flowOrderCode: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
+  },
+  flowBadgeBotica: {
+    backgroundColor: AURA_THEME.colors.sageBadge,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  flowBadgeBoticaText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
+  },
+  flowBadgeRuta: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  flowBadgeRutaText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  flowBadgeAlert: {
+    backgroundColor: '#FDE8E8',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  flowBadgeAlertText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#C53030',
+  },
+  flowRoute: {
+    fontSize: 11,
+    color: AURA_THEME.colors.textMuted,
+  },
+  flowProduct: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: AURA_THEME.colors.forestDark,
+    marginTop: 1,
+  },
+  flowWorker: {
+    fontSize: 10.5,
+    color: AURA_THEME.colors.textSecondary,
+    marginTop: 2,
+  },
+  stockActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
+  stockActionBtn: {
+    backgroundColor: AURA_THEME.colors.forestDark,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  stockActionBtnText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  stockActionSecBtn: {
+    backgroundColor: AURA_THEME.colors.surfaceSubtle,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderMedium,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  stockActionSecBtnText: {
+    color: AURA_THEME.colors.forestDark,
+    fontSize: 10,
+  },
+  bottomQuickActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  quickActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: AURA_THEME.colors.surface,
+    paddingVertical: 10,
+    borderRadius: AURA_THEME.borderRadius.md,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderLight,
+    gap: 6,
+  },
+  quickActionText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: AURA_THEME.colors.forestDark,
+  },
+
+  // Sedes & Stock Styles (Page 9)
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  pageTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
+  },
+  pageSubtitle: {
+    fontSize: 11,
+    color: AURA_THEME.colors.textMuted,
+  },
+  topActionsRow: {
+    flexDirection: 'row',
+  },
+  smallActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: AURA_THEME.colors.surface,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: AURA_THEME.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderLight,
+    gap: 4,
+  },
+  smallActionText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: AURA_THEME.colors.forestDark,
+  },
+  stockFiltersRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  stockPill: {
+    backgroundColor: AURA_THEME.colors.surface,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: AURA_THEME.borderRadius.full,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderLight,
+  },
+  stockPillActive: {
+    backgroundColor: AURA_THEME.colors.forestDark,
+  },
+  stockPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: AURA_THEME.colors.textSecondary,
+  },
+  stockPillTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  stockAlertCard: {
+    backgroundColor: AURA_THEME.colors.surface,
+    borderRadius: AURA_THEME.borderRadius.xl,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderLight,
+    marginBottom: 14,
+  },
+  stockAlertHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  stockAlertTitle: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
+  },
+  criticalCountBadge: {
+    backgroundColor: '#FAF5EE',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#E8DCB8',
+  },
+  criticalCountText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: AURA_THEME.colors.terracotta,
+  },
+  stockAlertSub: {
+    fontSize: 10.5,
+    color: AURA_THEME.colors.textMuted,
+    marginBottom: 10,
+  },
+  criticalItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: AURA_THEME.colors.borderLight,
+  },
+  criticalItemName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: AURA_THEME.colors.forestDark,
+  },
+  urgentRedBadge: {
+    backgroundColor: '#FDE8E8',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
+  urgentRedBadgeText: {
+    fontSize: 8.5,
+    fontWeight: '800',
+    color: '#C53030',
+  },
+  criticalItemSub: {
+    fontSize: 10,
+    color: AURA_THEME.colors.textMuted,
+    marginTop: 1,
+  },
+  transferStockBtn: {
+    backgroundColor: AURA_THEME.colors.forestDark,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  transferStockBtnText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  sedesCapacityCard: {
+    backgroundColor: AURA_THEME.colors.surface,
+    borderRadius: AURA_THEME.borderRadius.xl,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderLight,
+    marginBottom: 14,
+  },
+  sedesCapacityHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  sedesCapacitySub: {
+    fontSize: 10.5,
+    color: AURA_THEME.colors.textMuted,
+  },
+  sedeHealthItem: {
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: AURA_THEME.colors.borderLight,
+  },
+  sedeHealthTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  sedeHealthName: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: AURA_THEME.colors.forestDark,
+  },
+  loadBadgeHigh: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  loadBadgeHighText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#991B1B',
+  },
+  loadBadgeOpt: {
+    backgroundColor: AURA_THEME.colors.sageBadge,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  loadBadgeOptText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
+  },
+  loadBadgeNormal: {
+    backgroundColor: '#EBF3EE',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  loadBadgeNormalText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestMedium,
+  },
+  sedeHealthDetail: {
+    fontSize: 10.5,
+    color: AURA_THEME.colors.textMuted,
+  },
+  transferCard: {
+    backgroundColor: AURA_THEME.colors.surface,
+    borderRadius: AURA_THEME.borderRadius.xl,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderLight,
+    marginBottom: 14,
+  },
+  transferItem: {
+    backgroundColor: AURA_THEME.colors.surfaceSubtle,
+    borderRadius: AURA_THEME.borderRadius.md,
+    padding: 10,
+    marginTop: 8,
+  },
+  transferUnit: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: AURA_THEME.colors.forestDark,
+  },
+  transferEta: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: AURA_THEME.colors.terracotta,
+  },
+  transferContent: {
+    fontSize: 11,
+    color: AURA_THEME.colors.textSecondary,
+    marginTop: 2,
+  },
+  transferRoute: {
+    fontSize: 10,
+    color: AURA_THEME.colors.textMuted,
+    marginTop: 2,
+  },
+  circularCard: {
+    backgroundColor: '#EAF4EC',
+    borderRadius: AURA_THEME.borderRadius.xl,
+    padding: 14,
+    marginBottom: 14,
+  },
+  circularHeader: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  circularTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
+  },
+  circularSub: {
+    fontSize: 10.5,
+    color: AURA_THEME.colors.textSecondary,
+    lineHeight: 14,
+  },
+  circularStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: AURA_THEME.colors.surface,
+    borderRadius: AURA_THEME.borderRadius.md,
+    padding: 10,
+  },
+  circularStatCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  circularStatNum: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: AURA_THEME.colors.forestDark,
+  },
+  circularStatLabel: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: AURA_THEME.colors.forestMedium,
+    textAlign: 'center',
+  },
+  circularStatSub: {
+    fontSize: 8.5,
+    color: AURA_THEME.colors.textMuted,
+  },
+  circularDivider: {
+    width: 1,
+    backgroundColor: AURA_THEME.colors.borderLight,
+  },
+
+  // Flota Styles (Page 4)
+  fleetHero: {
+    backgroundColor: '#EAF4EC',
+    borderRadius: AURA_THEME.borderRadius.xl,
+    padding: 16,
+    marginBottom: 12,
+  },
+  fleetHeroTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  onlineFleetPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: AURA_THEME.colors.surface,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: AURA_THEME.borderRadius.full,
+    gap: 4,
+  },
+  greenPulseDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: AURA_THEME.colors.statusGreen,
+  },
+  onlineFleetText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
+  },
+  co2SavedPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: AURA_THEME.colors.sageBadge,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: AURA_THEME.borderRadius.full,
+    gap: 4,
+  },
+  co2SavedText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: AURA_THEME.colors.forestDark,
+  },
+  fleetHeroTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: AURA_THEME.colors.forestDark,
+    letterSpacing: 0.8,
+  },
+  fleetHeroSub: {
+    fontSize: 11,
+    color: AURA_THEME.colors.textSecondary,
+    marginBottom: 12,
+  },
+  fleetMetricsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  fleetMetricBox: {
+    flex: 1,
+    backgroundColor: AURA_THEME.colors.surface,
+    borderRadius: AURA_THEME.borderRadius.sm,
+    padding: 8,
+    alignItems: 'center',
+  },
+  fleetMetricVal: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
+  },
+  fleetMetricLabel: {
+    fontSize: 9.5,
+    color: AURA_THEME.colors.textMuted,
+  },
+  fleetFiltersRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 12,
+  },
+  fleetFilterPill: {
+    backgroundColor: AURA_THEME.colors.surface,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: AURA_THEME.borderRadius.full,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderLight,
+  },
+  fleetFilterPillActive: {
+    backgroundColor: AURA_THEME.colors.forestDark,
+  },
+  fleetFilterText: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: AURA_THEME.colors.textSecondary,
+  },
+  fleetFilterTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  courierCard: {
+    backgroundColor: AURA_THEME.colors.surface,
+    borderRadius: AURA_THEME.borderRadius.lg,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderLight,
+    marginBottom: 10,
+  },
+  courierCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  courierName: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
+  },
+  lotoBadgeMini: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
+  lotoBadgeMiniText: {
+    fontSize: 8.5,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  availableBadgeMini: {
+    backgroundColor: AURA_THEME.colors.sageBadge,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
+  availableBadgeMiniText: {
+    fontSize: 8.5,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
+  },
+  courierRating: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: AURA_THEME.colors.star,
+  },
+  batteryPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: AURA_THEME.colors.statusGreenBg,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    gap: 3,
+  },
+  batteryText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: AURA_THEME.colors.statusGreen,
+  },
+  courierVehicleLine: {
+    fontSize: 11,
+    color: AURA_THEME.colors.textSecondary,
+    marginBottom: 2,
+  },
+  courierOrderInfo: {
+    fontSize: 10.5,
+    color: AURA_THEME.colors.textMuted,
+    marginBottom: 8,
+  },
+  courierCardActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  courierCardBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: AURA_THEME.colors.surfaceSubtle,
+    borderRadius: AURA_THEME.borderRadius.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderMedium,
+  },
+  courierCardBtnText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: AURA_THEME.colors.forestDark,
+  },
+
+  // Métricas Styles (Page 1)
+  metricasTopHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  auditPill: {
+    backgroundColor: AURA_THEME.colors.sageBadge,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  auditPillText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
+  },
+  periodPillsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  periodPill: {
+    backgroundColor: AURA_THEME.colors.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: AURA_THEME.borderRadius.full,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderLight,
+  },
+  periodPillActive: {
+    backgroundColor: AURA_THEME.colors.forestDark,
+  },
+  periodPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: AURA_THEME.colors.textSecondary,
+  },
+  periodPillTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  revenueCard: {
+    backgroundColor: AURA_THEME.colors.surface,
+    borderRadius: AURA_THEME.borderRadius.xl,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderLight,
+    marginBottom: 14,
+  },
+  revenueLabel: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: AURA_THEME.colors.textMuted,
+    letterSpacing: 0.8,
+    marginBottom: 4,
+  },
+  revenueAmountRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+    marginBottom: 4,
+  },
+  revenueAmount: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: AURA_THEME.colors.forestDark,
+  },
+  revenueCurrency: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: AURA_THEME.colors.textSecondary,
+  },
+  plusPercentPill: {
+    backgroundColor: AURA_THEME.colors.statusGreenBg,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  plusPercentText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: AURA_THEME.colors.statusGreen,
+  },
+  revenueCompared: {
+    fontSize: 11,
+    color: AURA_THEME.colors.textMuted,
+    marginBottom: 14,
+  },
+  revenueStatsRow: {
+    flexDirection: 'row',
+    backgroundColor: AURA_THEME.colors.surfaceSubtle,
+    borderRadius: AURA_THEME.borderRadius.md,
+    padding: 12,
+  },
+  revenueStatCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  revStatTitle: {
+    fontSize: 10,
+    color: AURA_THEME.colors.textMuted,
+    marginBottom: 2,
+  },
+  revStatVal: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
+  },
+  revStatSub: {
+    fontSize: 9.5,
+    color: AURA_THEME.colors.textMuted,
+  },
+  revStatDivider: {
+    width: 1,
+    backgroundColor: AURA_THEME.colors.borderLight,
+  },
+  salesBySantuarioCard: {
+    backgroundColor: AURA_THEME.colors.surface,
+    borderRadius: AURA_THEME.borderRadius.xl,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderLight,
+    marginBottom: 14,
+  },
+  cardHeaderBetween: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  sanctuariesActiveCount: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: AURA_THEME.colors.terracotta,
+    letterSpacing: 0.5,
+  },
+  sanctuaryBarRow: {
+    marginBottom: 10,
+  },
+  sancName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: AURA_THEME.colors.forestDark,
+  },
+  sancVal: {
+    fontSize: 11,
+    color: AURA_THEME.colors.textSecondary,
+  },
+  barTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: AURA_THEME.colors.surfaceSubtle,
+    overflow: 'hidden',
+  },
+  barProg: {
+    height: 6,
+    borderRadius: 3,
+  },
+  hourlyCard: {
+    backgroundColor: AURA_THEME.colors.surface,
+    borderRadius: AURA_THEME.borderRadius.xl,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderLight,
+    marginBottom: 14,
+  },
+  hourlyLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: AURA_THEME.colors.textMuted,
+    letterSpacing: 0.8,
+  },
+  peakBadge: {
+    backgroundColor: AURA_THEME.colors.terracottaBadge,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  peakBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: AURA_THEME.colors.terracotta,
+  },
+  hourlyDesc: {
+    fontSize: 11,
+    color: AURA_THEME.colors.textMuted,
+    lineHeight: 15,
+    marginBottom: 12,
+  },
+  hourlyTimelineRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  timelineItem: {
+    alignItems: 'center',
+  },
+  timelineDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
+    backgroundColor: '#D1DDD4',
+    marginBottom: 4,
   },
-  dotManual: {
-    backgroundColor: '#FFB300',
+  timelineDotPeak: {
+    backgroundColor: AURA_THEME.colors.terracotta,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
-  dotAuto: {
-    backgroundColor: '#00E676',
+  timelineText: {
+    fontSize: 9.5,
+    color: AURA_THEME.colors.textMuted,
   },
-  modeStatusTitle: {
-    fontSize: 11,
-    fontWeight: '900',
-    color: '#FFFFFF',
+  timelineTextPeak: {
+    color: AURA_THEME.colors.forestDark,
+    fontWeight: '800',
+  },
+  topFormulasCard: {
+    backgroundColor: AURA_THEME.colors.surface,
+    borderRadius: AURA_THEME.borderRadius.xl,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderLight,
+    marginBottom: 14,
+  },
+  topTag: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
     letterSpacing: 0.5,
   },
-  modeDescriptionText: {
-    fontSize: 10,
-    color: '#8B949E',
-    marginTop: 2,
-    lineHeight: 14,
+  formulaRankItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: AURA_THEME.colors.borderLight,
   },
-  modeButtonsRow: {
+  rankBadgeFirst: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: AURA_THEME.colors.terracotta,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rankBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: AURA_THEME.colors.surfaceSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rankNum: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  formulaRankName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: AURA_THEME.colors.forestDark,
+  },
+  formulaRankSub: {
+    fontSize: 10,
+    color: AURA_THEME.colors.textMuted,
+  },
+  formulaRankPrice: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
+  },
+  compensationCard: {
+    backgroundColor: AURA_THEME.colors.surface,
+    borderRadius: AURA_THEME.borderRadius.xl,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: AURA_THEME.colors.borderLight,
+    marginBottom: 14,
+  },
+  liquidatedTag: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: AURA_THEME.colors.statusGreen,
+  },
+  compRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: AURA_THEME.colors.borderLight,
+  },
+  compLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: AURA_THEME.colors.forestDark,
+  },
+  compSub: {
+    fontSize: 10,
+    color: AURA_THEME.colors.textMuted,
+  },
+  compAmount: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: AURA_THEME.colors.forestDark,
+  },
+  exportActionsRow: {
     flexDirection: 'row',
     gap: 8,
+    marginBottom: 10,
   },
-  modeToggleBtn: {
+  exportBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#20242B',
-    paddingVertical: 7,
-    borderRadius: 8,
+    backgroundColor: AURA_THEME.colors.surface,
+    paddingVertical: 10,
+    borderRadius: AURA_THEME.borderRadius.md,
     borderWidth: 1,
-    borderColor: '#2E343E',
-    gap: 5,
-  },
-  modeBtnActiveManual: {
-    backgroundColor: '#FFB300',
-    borderColor: '#FFB300',
-  },
-  modeBtnActiveAuto: {
-    backgroundColor: '#00E676',
-    borderColor: '#00E676',
-  },
-  modeToggleBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#8B949E',
-  },
-  modeToggleBtnTextActive: {
-    color: '#1A1D20',
-    fontWeight: '900',
-  },
-  // Pending Orders Section
-  pendingSection: {
-    backgroundColor: '#201618',
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#FF174440',
-    marginBottom: 10,
-  },
-  pendingSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    borderColor: AURA_THEME.colors.borderLight,
     gap: 6,
   },
-  pendingSectionTitle: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#FF5252',
-  },
-  pendingSectionSub: {
-    fontSize: 10,
-    color: '#D1D7E0',
-    marginVertical: 4,
-    lineHeight: 14,
-  },
-  emptyPendingCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#16221A',
-    borderRadius: 8,
-    padding: 10,
-    gap: 8,
-    marginTop: 6,
-  },
-  emptyPendingText: {
-    fontSize: 11,
+  exportBtnText: {
+    fontSize: 10.5,
     fontWeight: '700',
-    color: '#00E676',
+    color: AURA_THEME.colors.forestDark,
   },
-  pendingOrderCard: {
-    backgroundColor: '#181C21',
-    borderRadius: 12,
-    padding: 10,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: '#FF525260',
-  },
-  orderItemsText: {
-    fontSize: 10,
-    color: '#8B949E',
-    marginTop: 3,
-  },
-  assignPickerBox: {
-    marginTop: 8,
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: '#282E37',
-  },
-  assignPickerLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#FFB300',
-  },
-  assignCourierBtn: {
+  shareBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2A303A',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-    marginRight: 6,
-    gap: 4,
+    justifyContent: 'center',
+    backgroundColor: AURA_THEME.colors.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: AURA_THEME.borderRadius.md,
     borderWidth: 1,
-    borderColor: '#3D4452',
+    borderColor: AURA_THEME.colors.borderLight,
+    gap: 6,
   },
-  assignCourierBtnText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  assignedToText: {
-    fontSize: 11,
-    color: '#8B949E',
-    marginTop: 4,
+  shareBtnText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: AURA_THEME.colors.forestDark,
   },
 });
