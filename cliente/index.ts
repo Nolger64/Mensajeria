@@ -1,5 +1,9 @@
+import { createElement } from 'react';
 import { registerRootComponent } from 'expo';
+import App from '../App';
 
-import App from './App';
+function RoleApp() {
+  return createElement(App, { requiredRole: 'cliente' });
+}
 
-registerRootComponent(App);
+registerRootComponent(RoleApp);

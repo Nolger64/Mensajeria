@@ -1,0 +1,5 @@
+project_id = "aura-spa"
+
+[functions.aura-api]
+entrypoint = "./functions/aura-api/index.ts"
+verify_jwt = false

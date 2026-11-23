@@ -7,16 +7,9 @@ import {
   CommunityMessage,
   MessageTag,
 } from '../types';
-import {
-  INITIAL_DRIVER_PROFILE,
-  MOCK_PARTNER_STORES,
-  MOCK_COWORKERS,
-  MOCK_COMMUNITY_MESSAGES,
-  SAMPLE_INCOMING_ORDER,
-  INITIAL_DELIVERY_STARS,
-} from '../data/mockData';
+import type { AuthUser } from '../../../src/services/authService';
 import { FHSApiService } from '../services/api';
-import { LocationService } from '../services/locationService';
+import { LocationService, DEFAULT_COORDINATES } from '../services/locationService';
 import { LocationPermissionModal } from '../components/Permissions/LocationPermissionModal';
 
 export type UserRole = 'repartidor' | 'admin' | 'test_lab';
@@ -56,7 +49,7 @@ interface AppContextType {
   advanceActiveOrderStep: () => void;
   completeActiveOrder: () => void;
   dismissCompletedOrder: () => void;
-  assignOrderToCoworker: (orderId: string, coworkerId: string) => void;
+  assignOrderToCoworker: (orderId: string, coworkerId: string) => Promise<boolean>;
 
   communityMessages: CommunityMessage[];
   sendCommunityMessage: (text: string, tag: MessageTag, customSender?: string) => void;
@@ -75,20 +68,39 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const AppProvider: React.FC<{ children: ReactNode; currentUser?: AuthUser | null }> = ({ children, currentUser }) => {
   const [role, setRole] = useState<UserRole>('admin');
   const [serverConnected, setServerConnected] = useState(false);
   const [serverUrl, setServerUrlState] = useState(FHSApiService.getServerUrl());
 
-  const [driver, setDriver] = useState<DriverProfile>(INITIAL_DRIVER_PROFILE);
-  const [stores, setStores] = useState<PartnerStore[]>(MOCK_PARTNER_STORES);
-  const [coworkers, setCoworkers] = useState<Coworker[]>(MOCK_COWORKERS);
-  const [allOrders, setAllOrders] = useState<DeliveryOrder[]>([SAMPLE_INCOMING_ORDER]);
+  const [driver, setDriver] = useState<DriverProfile>(() => ({
+    id: currentUser?.id ?? '',
+    name: currentUser?.name ?? '',
+    alias: currentUser?.name ?? '',
+    rating: 0,
+    level: '',
+    vehicle: currentUser?.vehicle ?? 'moto',
+    vehicleModel: '',
+    plate: currentUser?.plate ?? '',
+    isOnline: false,
+    coordinates: DEFAULT_COORDINATES,
+    todayEarnings: 0,
+    totalOrdersToday: 0,
+    acceptanceRate: 0,
+    onTimeRate: 0,
+    tipsToday: 0,
+    balanceAvailable: 0,
+    thermalBagVerified: false,
+    soatActive: false,
+  }));
+  const [stores, setStores] = useState<PartnerStore[]>([]);
+  const [coworkers, setCoworkers] = useState<Coworker[]>([]);
+  const [allOrders, setAllOrders] = useState<DeliveryOrder[]>([]);
   const [incomingOrder, setIncomingOrder] = useState<DeliveryOrder | null>(null);
   const [activeOrder, setActiveOrder] = useState<DeliveryOrder | null>(null);
   const [completedOrder, setCompletedOrder] = useState<DeliveryOrder | null>(null);
-  const [communityMessages, setCommunityMessages] = useState<CommunityMessage[]>(MOCK_COMMUNITY_MESSAGES);
-  const [deliveryStars, setDeliveryStars] = useState<import('../types').DeliveryStar[]>(INITIAL_DELIVERY_STARS);
+  const [communityMessages, setCommunityMessages] = useState<CommunityMessage[]>([]);
+  const [deliveryStars, setDeliveryStars] = useState<import('../types').DeliveryStar[]>([]);
 
   // Modo de Despacho y Aviso de Conexión
   const [dispatchMode, setDispatchModeState] = useState<import('../types').DispatchMode>('manual');
@@ -100,27 +112,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const requestLocationPermission = async (): Promise<boolean> => {
     const { granted } = await LocationService.requestLocationPermissions();
     setLocationPermissionGranted(granted);
-    if (granted) {
-      setShowPermissionModal(false);
-      const coords = await LocationService.getCurrentLocation();
-      if (coords) {
-        setDriver((prev) => ({
-          ...prev,
-          coordinates: coords,
-        }));
-      }
-    }
+    setShowPermissionModal(!granted);
     return granted;
   };
-
-  useEffect(() => {
-    // Solicitar permiso de ubicación al abrir la app de administrador
-    requestLocationPermission().then((granted) => {
-      if (!granted) {
-        setShowPermissionModal(true);
-      }
-    });
-  }, []);
 
   const setServerUrl = (url: string) => {
     FHSApiService.setServerUrl(url);
@@ -152,7 +146,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       if (health && health.online) {
         if (!serverConnected) {
-          setServerOnlineNotice('🟢 Servidor FHS en Línea • Conectado exitosamente');
+          setServerOnlineNotice('Conexión restablecida');
         }
         setServerConnected(true);
         if (health.dispatchMode === 'manual' || health.dispatchMode === 'automatic') {
@@ -298,10 +292,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const assignOrderToCoworker = async (orderId: string, coworkerId: string) => {
-    setAllOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, assignedWorkerId: coworkerId, status: 'ofertado' } : o))
-    );
-    await FHSApiService.assignOrder(orderId, coworkerId);
+    const updated = await FHSApiService.assignOrder(orderId, coworkerId);
+    if (!updated) return false;
+    setAllOrders((prev) => prev.map((order) => order.id === orderId ? updated : order));
+    setCoworkers((prev) => prev.map((worker) =>
+      worker.id === coworkerId ? { ...worker, status: 'en_ruta' } : worker
+    ));
+    return true;
   };
 
   const sendCommunityMessage = async (text: string, tag: MessageTag, customSender?: string) => {
@@ -329,16 +326,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     await FHSApiService.createDeliveryStar(newStar);
   };
 
-  const resetToMockData = async () => {
-    setDriver(INITIAL_DRIVER_PROFILE);
-    setStores(MOCK_PARTNER_STORES);
-    setCoworkers(MOCK_COWORKERS);
-    setCommunityMessages(MOCK_COMMUNITY_MESSAGES);
-    setIncomingOrder(null);
-    setActiveOrder(null);
-    setCompletedOrder(null);
-    await FHSApiService.resetData();
-  };
+  const resetToMockData = () => FHSApiService.resetData();
 
   return (
     <AppContext.Provider

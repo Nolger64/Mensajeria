@@ -1,16 +1,17 @@
 {
   "expo": {
-    "name": "FHS Repartidor",
+    "name": "Aura Spa · Entregas",
     "slug": "fhs-repartidor",
+    "scheme": "auraspa-reparto",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#FF441F"
+      "backgroundColor": "#454D46"
     },
     "ios": {
       "supportsTablet": true,
@@ -22,8 +23,9 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#FF441F"
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png",
+        "backgroundColor": "#454D46"
       },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
@@ -43,7 +45,8 @@
         {
           "locationAlwaysAndWhenInUsePermission": "FHS Repartidor necesita acceso a tu ubicación para el radar y navegación de pedidos."
         }
-      ]
+      ],
+      "expo-router"
     ]
   }
 }

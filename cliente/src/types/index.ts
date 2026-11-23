@@ -1,11 +1,4 @@
-export type StoreCategory = 
-  | 'todos'
-  | 'restaurante' 
-  | 'supermercado' 
-  | 'farmacia' 
-  | 'turbo' 
-  | 'express' 
-  | 'licores';
+export type StoreCategory = 'spa';
 
 export type PartnerTier = 'diamond' | 'gold' | 'silver';
 
@@ -92,7 +85,7 @@ export interface DeliveryOrder {
   customerPhone: string;
   customerAddress: string;
   customerNotes: string;
-  customerCoordinates: Coordinates;
+  customerCoordinates?: Coordinates;
   items: OrderItem[];
   basePay: number;
   customerTip: number;
@@ -102,7 +95,8 @@ export interface DeliveryOrder {
   distanceToCustomerKm: number;
   estimatedMinutes: number;
   paymentMethod: 'Tarjeta (Pagado)' | 'Efectivo contraentrega';
-  securityPin: string;
+  securityPin?: string;
+  totalToPay?: number;
   status: OrderStep;
   createdAt: string;
   assignedWorkerId?: string;
@@ -125,7 +119,7 @@ export interface DeliveryStar {
   createdAt: string;
 }
 
-export type UserRole = 'administrador' | 'repartidor' | 'cliente';
+export type UserRole = 'administrador' | 'repartidor' | 'cliente' | 'especialista';
 
 export interface User {
   id: string;

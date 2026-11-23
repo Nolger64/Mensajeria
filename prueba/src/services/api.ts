@@ -1,11 +1,8 @@
-import { Platform } from 'react-native';
+import { API_URL } from '../../../src/services/apiConfig';
 import { PartnerStore, Coworker, DeliveryOrder, CommunityMessage } from '../types';
 
-const DEFAULT_SERVER_URL =
-  Platform.OS === 'android' ? 'http://10.0.2.2:4000' : 'http://localhost:4000';
-
 export class FHSApiService {
-  private static baseUrl = DEFAULT_SERVER_URL;
+  private static baseUrl = API_URL;
 
   public static setServerUrl(url: string) {
     this.baseUrl = url.replace(/\/+$/, '');

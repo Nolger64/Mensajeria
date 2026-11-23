@@ -58,7 +58,7 @@ export const DeliverySuccessModal: React.FC<DeliverySuccessModalProps> = ({
               <Text style={styles.customerName}>{order.customerName}</Text>
             </View>
             <Text style={styles.feedbackQuote}>
-              "¡Súper rápido y la comida llegó en perfecto estado! Gracias por la entrega."
+              &quot;¡Súper rápido y la comida llegó en perfecto estado! Gracias por la entrega.&quot;
             </Text>
           </View>
 

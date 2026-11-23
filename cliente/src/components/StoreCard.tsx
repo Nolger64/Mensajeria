@@ -9,8 +9,6 @@ interface StoreCardProps {
 }
 
 export const StoreCard: React.FC<StoreCardProps> = ({ store, onPress }) => {
-  const isTurbo = store.category === 'turbo';
-
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.85}>
       {/* Banner / Header Bar */}
@@ -20,12 +18,6 @@ export const StoreCard: React.FC<StoreCardProps> = ({ store, onPress }) => {
         </View>
 
         <View style={styles.badgeRow}>
-          {isTurbo && (
-            <View style={styles.turboTag}>
-              <Text style={styles.turboText}>⚡ 10 MIN</Text>
-            </View>
-          )}
-
           {store.partnerTier === 'diamond' && (
             <View style={styles.diamondTag}>
               <Text style={styles.diamondText}>💎 Diamante</Text>

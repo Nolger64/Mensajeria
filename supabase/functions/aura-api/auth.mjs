@@ -1,18 +1,15 @@
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-
-// Clave secreta para firma de tokens JWT
-const JWT_SECRET = process.env.JWT_SECRET || 'fhs_secret_jwt_key_super_secure_2026_983749823749';
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
+import { randomUUID } from 'node:crypto';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 const BCRYPT_SALT_ROUNDS = 10;
 
 // Roles permitidos en el ecosistema FHS
-const VALID_ROLES = ['administrador', 'repartidor', 'cliente'];
+export const VALID_ROLES = ['administrador', 'repartidor', 'cliente', 'especialista'];
 
 /**
  * Valida formato estándar de correo electrónico
  */
-function validateEmail(email) {
+export function validateEmail(email) {
   if (!email || typeof email !== 'string') return false;
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email.trim().toLowerCase());
@@ -26,7 +23,7 @@ function validateEmail(email) {
  * - Al menos un número
  * - Al menos un caracter especial
  */
-function validatePasswordStrength(password) {
+export function validatePasswordStrength(password) {
   if (!password || typeof password !== 'string') {
     return { valid: false, message: 'La contraseña es requerida' };
   }
@@ -58,7 +55,7 @@ async function hashPassword(plainPassword) {
 /**
  * Hash sincrónico para la inicialización de usuarios predeterminados
  */
-function hashPasswordSync(plainPassword) {
+export function hashPasswordSync(plainPassword) {
   return bcrypt.hashSync(plainPassword, BCRYPT_SALT_ROUNDS);
 }
 
@@ -70,22 +67,9 @@ async function comparePassword(plainPassword, hashedPassword) {
 }
 
 /**
- * Genera un token JWT firmado con claims seguros y expiración
- */
-function generateToken(user) {
-  const payload = {
-    id: user.id,
-    email: user.email,
-    role: user.role,
-    name: user.name,
-  };
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
-}
-
-/**
  * Remueve campos sensibles (como el hash de la contraseña) antes de responder
  */
-function sanitizeUser(user) {
+export function sanitizeUser(user) {
   if (!user) return null;
   const { password, ...safeUser } = user;
   return safeUser;
@@ -94,7 +78,7 @@ function sanitizeUser(user) {
 /**
  * Middleware para agregar cabeceras de seguridad HTTP (estilo Helmet)
  */
-function securityHeadersMiddleware(req, res, next) {
+export function securityHeadersMiddleware(req, res, next) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('X-XSS-Protection', '1; mode=block');
@@ -104,44 +88,10 @@ function securityHeadersMiddleware(req, res, next) {
 }
 
 /**
- * Middleware de Autenticación: Verifica y decodifica el token JWT
- */
-function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.startsWith('Bearer ')
-    ? authHeader.split(' ')[1]
-    : null;
-
-  if (!token) {
-    return res.status(401).json({
-      success: false,
-      code: 'AUTH_TOKEN_REQUIRED',
-      message: 'Acceso no autorizado: Se requiere token de autenticación (Bearer <token>)',
-    });
-  }
-
-  jwt.verify(token, JWT_SECRET, (err, decodedUser) => {
-    if (err) {
-      const isExpired = err.name === 'TokenExpiredError';
-      return res.status(403).json({
-        success: false,
-        code: isExpired ? 'TOKEN_EXPIRED' : 'TOKEN_INVALID',
-        message: isExpired
-          ? 'El token de sesión ha expirado. Por favor inicia sesión nuevamente.'
-          : 'Token de autenticación inválido o manipulado.',
-      });
-    }
-
-    req.user = decodedUser;
-    next();
-  });
-}
-
-/**
  * Middleware de Autorización Basada en Roles (RBAC)
  * @param  {...string} allowedRoles - Roles permitidos ('administrador', 'repartidor', 'cliente')
  */
-function authorizeRoles(...allowedRoles) {
+export function authorizeRoles(...allowedRoles) {
   return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({
@@ -162,72 +112,94 @@ function authorizeRoles(...allowedRoles) {
     next();
   };
 }
-
 /**
- * Middleware opcional: si viene token lo autentica, si no, continúa como anónimo
+ * @typedef {{ id: string, email: string, password?: string }} Identity
+ * @typedef {{
+ *   create(email: string, password: string): Promise<{ id: string, password?: string }>,
+ *   verify(user: Identity, password: string): Promise<boolean>,
+ *   changePassword(user: Identity, password: string, currentPassword: string): Promise<void>,
+ *   changeEmail(user: Identity, email: string): Promise<void> | void,
+ *   remove(id: string): void
+ * }} IdentityProvider
  */
-function optionalAuthenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.startsWith('Bearer ')
-    ? authHeader.split(' ')[1]
-    : null;
 
-  if (!token) {
-    req.user = null;
-    return next();
+/** @type {IdentityProvider} */
+export const localIdentities = {
+  async create(email, password) {
+    return { id: randomUUID(), password: await hashPassword(password) };
+  },
+  verify(user, password) {
+    return user.password ? comparePassword(password, user.password) : Promise.resolve(false);
+  },
+  async changePassword(user, password) {
+    user.password = await hashPassword(password);
+  },
+  changeEmail() {},
+  remove() {},
+};
+
+export function createAuthentication({ signingKey, tokenExpiry = '24h', sandboxEnabled }) {
+  if (typeof signingKey !== 'string' || signingKey.length < 32) {
+    throw new Error('Configura JWT_SECRET con al menos 32 caracteres antes de iniciar el servidor.');
+  }
+  /**
+   * Genera un token JWT firmado con claims seguros y expiración
+   */
+  function generateToken(user) {
+    const payload = {
+      id: user.id,
+      role: user.role,
+    };
+    return jwt.sign(payload, signingKey, { expiresIn: tokenExpiry });
   }
 
-  jwt.verify(token, JWT_SECRET, (err, decodedUser) => {
-    if (!err) {
-      req.user = decodedUser;
-    }
-    next();
-  });
-}
-
-/**
- * Middleware que aplica RBAC de forma estricta si se provee Bearer token,
- * o permite modo desarrollo si no se requiere STRICT_AUTH=true.
- */
-function checkRoleOrDev(...allowedRoles) {
-  return (req, res, next) => {
+  /**
+   * Middleware de Autenticación: Verifica y decodifica el token JWT
+   */
+  function authenticateToken(req, res, next) {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.startsWith('Bearer ')
       ? authHeader.split(' ')[1]
       : null;
 
     if (!token) {
-      if (process.env.STRICT_AUTH === 'true') {
-        return res.status(401).json({
-          success: false,
-          code: 'AUTH_TOKEN_REQUIRED',
-          message: `Se requiere token Bearer con rol [${allowedRoles.join(', ')}]`,
-        });
-      }
-      // Modo desarrollo: asigna un usuario virtual con rol por defecto
-      const devRole = req.headers['x-dev-role'] || allowedRoles[0];
-      req.user = { id: 'dev-user', role: devRole, name: `Dev (${devRole})` };
-      return next();
+      return res.status(401).json({
+        success: false,
+        code: 'AUTH_TOKEN_REQUIRED',
+        message: 'Acceso no autorizado: Se requiere token de autenticación (Bearer <token>)',
+      });
     }
 
-    authenticateToken(req, res, () => {
-      authorizeRoles(...allowedRoles)(req, res, next);
-    });
-  };
-}
+    jwt.verify(token, signingKey, (err, decodedUser) => {
+      if (err) {
+        const isExpired = err.name === 'TokenExpiredError';
+        return res.status(403).json({
+          success: false,
+          code: isExpired ? 'TOKEN_EXPIRED' : 'TOKEN_INVALID',
+          message: isExpired
+            ? 'El token de sesión ha expirado. Por favor inicia sesión nuevamente.'
+            : 'Token de autenticación inválido o manipulado.',
+        });
+      }
 
-module.exports = {
-  VALID_ROLES,
-  validateEmail,
-  validatePasswordStrength,
-  hashPassword,
-  hashPasswordSync,
-  comparePassword,
-  generateToken,
-  sanitizeUser,
-  securityHeadersMiddleware,
-  authenticateToken,
-  authorizeRoles,
-  optionalAuthenticateToken,
-  checkRoleOrDev,
-};
+      const user = req.app.locals.findUser(decodedUser.id);
+      if (!user || user.role !== decodedUser.role) {
+        return res.status(401).json({ success: false, message: 'Vuelve a iniciar sesión.' });
+      }
+      req.user = sanitizeUser(user);
+      next();
+    });
+  }
+
+  // El entorno de pruebas se ejecuta aislado. En la app se exige sesión y rol.
+  function checkRoleOrDev(...allowedRoles) {
+    return (req, res, next) => {
+      if (sandboxEnabled && !req.headers.authorization) {
+        req.user = { id: 'sandbox', role: allowedRoles[0], name: 'Sandbox' };
+        return next();
+      }
+      authenticateToken(req, res, () => authorizeRoles(...allowedRoles)(req, res, next));
+    };
+  }
+  return { authenticateToken, checkRoleOrDev, generateToken };
+}

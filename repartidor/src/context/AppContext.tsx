@@ -10,15 +10,7 @@ import {
   RadioParticipant,
   VoiceTransmission,
 } from '../types';
-import {
-  INITIAL_DRIVER_PROFILE,
-  MOCK_PARTNER_STORES,
-  MOCK_COWORKERS,
-  MOCK_COMMUNITY_MESSAGES,
-  MOCK_RADIO_ROOMS,
-  SAMPLE_INCOMING_ORDER,
-  INITIAL_DELIVERY_STARS,
-} from '../data/mockData';
+import type { AuthUser } from '../../../src/services/authService';
 import { FHSApiService } from '../services/api';
 import { LocationService, DEFAULT_COORDINATES } from '../services/locationService';
 import { LocationPermissionModal } from '../components/Permissions/LocationPermissionModal';
@@ -56,10 +48,10 @@ interface AppContextType {
   activeOrder: DeliveryOrder | null;
   completedOrder: DeliveryOrder | null;
   createAndDispatchOrder: (order: DeliveryOrder, target: 'repartidor' | 'fleet') => void;
-  acceptIncomingOrder: (order: DeliveryOrder) => void;
+  acceptIncomingOrder: (order: DeliveryOrder) => Promise<boolean>;
   rejectIncomingOrder: () => void;
-  advanceActiveOrderStep: () => void;
-  completeActiveOrder: () => void;
+  advanceActiveOrderStep: () => Promise<boolean>;
+  completeActiveOrder: (pin: string) => Promise<boolean>;
   dismissCompletedOrder: () => void;
   assignOrderToCoworker: (orderId: string, coworkerId: string) => void;
 
@@ -83,7 +75,6 @@ interface AppContextType {
   startTransmitting: () => void;
   stopTransmittingAndSend: (text: string, tag?: MessageTag) => Promise<void>;
   playTransmissionAudio: (tx: VoiceTransmission) => void;
-  simulateIncomingCoworkerVoice: () => void;
 
   deliveryStars: import('../types').DeliveryStar[];
   addDeliveryStar: (star: Omit<import('../types').DeliveryStar, 'id' | 'createdAt'>) => Promise<void>;
@@ -98,29 +89,48 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const AppProvider: React.FC<{ children: ReactNode; currentUser?: AuthUser | null }> = ({ children, currentUser }) => {
   const [role, setRole] = useState<UserRole>('repartidor');
   const [serverConnected, setServerConnected] = useState(false);
   const [serverUrl, setServerUrlState] = useState(FHSApiService.getServerUrl());
 
-  const [driver, setDriver] = useState<DriverProfile>(INITIAL_DRIVER_PROFILE);
-  const [stores, setStores] = useState<PartnerStore[]>(MOCK_PARTNER_STORES);
-  const [coworkers, setCoworkers] = useState<Coworker[]>(MOCK_COWORKERS);
-  const [allOrders, setAllOrders] = useState<DeliveryOrder[]>([SAMPLE_INCOMING_ORDER]);
+  const [driver, setDriver] = useState<DriverProfile>(() => ({
+    id: currentUser?.id ?? '',
+    name: currentUser?.name ?? '',
+    alias: currentUser?.name ?? '',
+    rating: 0,
+    level: '',
+    vehicle: currentUser?.vehicle ?? 'moto',
+    vehicleModel: '',
+    plate: currentUser?.plate ?? '',
+    isOnline: false,
+    coordinates: DEFAULT_COORDINATES,
+    todayEarnings: 0,
+    totalOrdersToday: 0,
+    acceptanceRate: 0,
+    onTimeRate: 0,
+    tipsToday: 0,
+    balanceAvailable: 0,
+    thermalBagVerified: false,
+    soatActive: false,
+  }));
+  const [stores, setStores] = useState<PartnerStore[]>([]);
+  const [coworkers, setCoworkers] = useState<Coworker[]>([]);
+  const [allOrders, setAllOrders] = useState<DeliveryOrder[]>([]);
   const [incomingOrder, setIncomingOrder] = useState<DeliveryOrder | null>(null);
   const [activeOrder, setActiveOrder] = useState<DeliveryOrder | null>(null);
   const [completedOrder, setCompletedOrder] = useState<DeliveryOrder | null>(null);
-  const [communityMessages, setCommunityMessages] = useState<CommunityMessage[]>(MOCK_COMMUNITY_MESSAGES);
-  const [deliveryStars, setDeliveryStars] = useState<import('../types').DeliveryStar[]>(INITIAL_DELIVERY_STARS);
+  const [communityMessages, setCommunityMessages] = useState<CommunityMessage[]>([]);
+  const [deliveryStars, setDeliveryStars] = useState<import('../types').DeliveryStar[]>([]);
 
   // Modo de despacho y aviso de conexión
   const [dispatchMode, setDispatchMode] = useState<import('../types').DispatchMode>('manual');
   const [serverOnlineNotice, setServerOnlineNotice] = useState<string | null>(null);
 
   // Estados de Salas de Radio y Reunión en Vivo
-  const [radioRooms, setRadioRooms] = useState<RadioRoom[]>(MOCK_RADIO_ROOMS);
-  const [activeRadioRoomId, setActiveRadioRoomId] = useState<string>('room-1');
-  const [isInVoiceMeeting, setIsInVoiceMeeting] = useState<boolean>(true);
+  const [radioRooms, setRadioRooms] = useState<RadioRoom[]>([]);
+  const [activeRadioRoomId, setActiveRadioRoomId] = useState<string>('');
+  const [isInVoiceMeeting, setIsInVoiceMeeting] = useState<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isHandsFreeSpeaker, setIsHandsFreeSpeaker] = useState<boolean>(true);
   const [isTransmittingVoice, setIsTransmittingVoice] = useState<boolean>(false);
@@ -195,7 +205,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       if (health && health.online) {
         if (!serverConnected) {
-          setServerOnlineNotice('🟢 Servidor FHS en Línea • Conectado exitosamente');
+          setServerOnlineNotice('Conexión restablecida');
         }
         setServerConnected(true);
         if (health.dispatchMode === 'manual' || health.dispatchMode === 'automatic') {
@@ -206,31 +216,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (serverStores && isMounted) setStores(serverStores);
 
         const serverWorkers = await FHSApiService.getWorkers();
-        if (serverWorkers && isMounted) setCoworkers(serverWorkers);
+        if (serverWorkers && isMounted) {
+          setCoworkers(serverWorkers);
+          const me = serverWorkers.find((worker) => worker.id === driver.id);
+          if (me) setDriver((previous) => ({ ...previous, isOnline: me.status !== 'descanso' }));
+        }
 
         const serverOrders = await FHSApiService.getOrders();
         if (serverOrders && isMounted) {
           setAllOrders(serverOrders);
 
-          // Filtrar órdenes según modo de despacho:
-          // Modo Manual (Por defecto): El pedido solo llega si el administrador lo asignó específicamente a este repartidor
-          // Modo Automático: La app asigna los pedidos automáticamente
-          const currentMode = (health.dispatchMode as import('../types').DispatchMode) || dispatchMode;
-          if (currentMode === 'manual') {
-            const assignedToMe = serverOrders.find(
-              (o) => o.assignedWorkerId === driver.id && o.status === 'ofertado'
-            );
-            if (assignedToMe && !activeOrder) {
-              setIncomingOrder(assignedToMe);
-            }
-          } else {
-            const autoOffer = serverOrders.find(
-              (o) => (o.assignedWorkerId === driver.id || !o.assignedWorkerId) && o.status === 'ofertado'
-            );
-            if (autoOffer && !activeOrder) {
-              setIncomingOrder(autoOffer);
-            }
-          }
+          const active = serverOrders.find((order) =>
+            ['rumbo_tienda', 'en_tienda', 'rumbo_cliente'].includes(order.status)
+          ) ?? null;
+          setActiveOrder(active);
+          setIncomingOrder(active ? null : serverOrders.find((order) => order.status === 'ofertado') ?? null);
         }
 
         const serverMessages = await FHSApiService.getMessages();
@@ -253,7 +253,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       isMounted = false;
       clearInterval(interval);
     };
-  }, [activeOrder, serverConnected, dispatchMode, driver.id]);
+  }, [serverConnected, driver.id]);
 
   const updateDriver = (updated: Partial<DriverProfile>) => {
     setDriver((prev) => ({ ...prev, ...updated }));
@@ -315,11 +315,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const acceptIncomingOrder = async (order: DeliveryOrder) => {
+    const updated = await FHSApiService.updateOrderStatus(order.id, 'rumbo_tienda');
+    if (!updated) return false;
     setIncomingOrder(null);
-    const active = { ...order, status: 'rumbo_tienda' as const };
-    setActiveOrder(active);
-    setAllOrders((prev) => prev.map((o) => (o.id === order.id ? active : o)));
-    await FHSApiService.updateOrderStatus(order.id, 'rumbo_tienda');
+    setActiveOrder(updated);
+    setAllOrders((prev) => prev.map((entry) => entry.id === updated.id ? updated : entry));
+    return true;
   };
 
   const rejectIncomingOrder = () => {
@@ -327,36 +328,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const advanceActiveOrderStep = async () => {
-    if (!activeOrder) return;
-    let nextStatus: DeliveryOrder['status'] = activeOrder.status;
-
-    if (activeOrder.status === 'rumbo_tienda') {
-      nextStatus = 'en_tienda';
-    } else if (activeOrder.status === 'en_tienda') {
-      nextStatus = 'rumbo_cliente';
-    }
-
-    const updated = { ...activeOrder, status: nextStatus };
+    if (!activeOrder) return false;
+    const status = activeOrder.status === 'rumbo_tienda' ? 'en_tienda' : 'rumbo_cliente';
+    const updated = await FHSApiService.updateOrderStatus(activeOrder.id, status);
+    if (!updated) return false;
     setActiveOrder(updated);
-    setAllOrders((prev) => prev.map((o) => (o.id === activeOrder.id ? updated : o)));
-    await FHSApiService.updateOrderStatus(activeOrder.id, nextStatus);
+    setAllOrders((prev) => prev.map((entry) => entry.id === updated.id ? updated : entry));
+    return true;
   };
 
-  const completeActiveOrder = async () => {
-    if (!activeOrder) return;
-    const finished: DeliveryOrder = { ...activeOrder, status: 'entregado' };
+  const completeActiveOrder = async (pin: string) => {
+    if (!activeOrder) return false;
+    const finished = await FHSApiService.updateOrderStatus(activeOrder.id, 'entregado', pin);
+    if (!finished) return false;
     setCompletedOrder(finished);
     setActiveOrder(null);
-
-    setAllOrders((prev) => prev.map((o) => (o.id === activeOrder.id ? finished : o)));
-    await FHSApiService.updateOrderStatus(activeOrder.id, 'entregado');
-
-    updateDriver({
-      todayEarnings: driver.todayEarnings + finished.totalEarnings,
-      totalOrdersToday: driver.totalOrdersToday + 1,
-      tipsToday: driver.tipsToday + finished.customerTip,
-      balanceAvailable: driver.balanceAvailable + finished.totalEarnings,
-    });
+    setAllOrders((prev) => prev.map((entry) => entry.id === finished.id ? finished : entry));
+    return true;
   };
 
   const dismissCompletedOrder = () => {
@@ -475,70 +463,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     );
   };
 
-  const simulateIncomingCoworkerVoice = () => {
-    const sampleChatter = [
-      {
-        senderId: 'cow-3',
-        senderName: 'Mateo Silva (Pulsar 200)',
-        vehicle: 'moto' as const,
-        text: 'Compañeros, la Cra 15 con Calle 93 tiene trancón pesado por camión varado. Recomiendo desviar por la 11.',
-        tag: 'trafico' as const,
-      },
-      {
-        senderId: 'cow-2',
-        senderName: 'Valentina Ríos (Trek Bici)',
-        vehicle: 'bici' as const,
-        text: 'El Corral del Parque 93 ya tiene 4 pedidos listos en mesa, entran y salen en 2 minutos sin fila.',
-        tag: 'tienda' as const,
-      },
-      {
-        senderId: 'cow-4',
-        senderName: 'Andrés Gómez (Honda)',
-        vehicle: 'moto' as const,
-        text: 'Ojo en la 85 con 15, control de tránsito preventivo. Tengan SOAT y casco al día.',
-        tag: 'trafico' as const,
-      },
-      {
-        senderId: 'usr-admin-1',
-        senderName: 'Torre de Control FHS',
-        vehicle: 'auto' as const,
-        text: 'Atención a todos los repartidores activos: calzada húmeda por llovizna. Manejen con precaución.',
-        tag: 'alerta' as const,
-      },
-    ];
-    const pick = sampleChatter[Math.floor(Math.random() * sampleChatter.length)];
-    const simTx: VoiceTransmission = {
-      id: `tx-sim-${Date.now()}`,
-      roomId: activeRadioRoomId || 'room-1',
-      senderId: pick.senderId,
-      senderName: pick.senderName,
-      senderVehicle: pick.vehicle,
-      audioText: pick.text,
-      tag: pick.tag,
-      durationSec: 4,
-      timestamp: new Date().toISOString(),
-      timeAgo: 'Justo ahora',
-    };
-
-    setRadioRooms((prev) =>
-      prev.map((r) =>
-        r.id === (activeRadioRoomId || 'room-1')
-          ? { ...r, transmissions: [simTx, ...r.transmissions.slice(0, 49)] }
-          : r
-      )
-    );
-
-    if (isHandsFreeSpeaker) {
-      setSpeakingParticipantId(pick.senderId);
-      radioAudioService.speakTransmission(
-        pick.senderName,
-        pick.text,
-        pick.vehicle,
-        () => setSpeakingParticipantId(pick.senderId),
-        () => setSpeakingParticipantId(null)
-      );
-    }
-  };
 
   const addDeliveryStar = async (starData: Omit<import('../types').DeliveryStar, 'id' | 'createdAt'>) => {
     const newStar: import('../types').DeliveryStar = {
@@ -550,17 +474,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     await FHSApiService.createDeliveryStar(newStar);
   };
 
-  const resetToMockData = async () => {
-    setDriver(INITIAL_DRIVER_PROFILE);
-    setStores(MOCK_PARTNER_STORES);
-    setCoworkers(MOCK_COWORKERS);
-    setCommunityMessages(MOCK_COMMUNITY_MESSAGES);
-    setRadioRooms(MOCK_RADIO_ROOMS);
-    setIncomingOrder(null);
-    setActiveOrder(null);
-    setCompletedOrder(null);
-    await FHSApiService.resetData();
-  };
+  const resetToMockData = () => FHSApiService.resetData();
 
   return (
     <AppContext.Provider
@@ -608,7 +522,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         startTransmitting,
         stopTransmittingAndSend,
         playTransmissionAudio,
-        simulateIncomingCoworkerVoice,
         deliveryStars,
         addDeliveryStar,
         dispatchMode,

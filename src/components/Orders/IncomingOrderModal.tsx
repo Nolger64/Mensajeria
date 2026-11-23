@@ -16,11 +16,16 @@ export const IncomingOrderModal: React.FC<IncomingOrderModalProps> = ({
   onAccept,
   onReject,
 }) => {
+  const [lastOrderId, setLastOrderId] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState(30);
+
+  if (order && order.id !== lastOrderId) {
+    setLastOrderId(order.id);
+    setTimeLeft(30);
+  }
 
   useEffect(() => {
     if (!visible || !order) {
-      setTimeLeft(30);
       return;
     }
 

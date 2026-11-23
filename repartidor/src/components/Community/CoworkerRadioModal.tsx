@@ -51,7 +51,6 @@ export const CoworkerRadioModal: React.FC<CoworkerRadioModalProps> = ({
     startTransmitting,
     stopTransmittingAndSend,
     playTransmissionAudio,
-    simulateIncomingCoworkerVoice,
     sendCommunityMessage,
   } = useApp();
 
@@ -121,33 +120,9 @@ export const CoworkerRadioModal: React.FC<CoworkerRadioModalProps> = ({
     };
   }, [isTransmittingVoice]);
 
-  // Quick voice transmission presets
   const quickVoicePresets: { label: string; text: string; tag: MessageTag }[] = [
-    {
-      label: '🌧️ Lluvia en Cuadrante',
-      text: 'Compañeros, empezó llovizna suave por mi cuadrante. Cuidado con asfalto resbaloso.',
-      tag: 'clima',
-    },
-    {
-      label: '🚨 Retén de Tránsito',
-      text: 'Ojo, puesto de control preventivo de tránsito en la 85 con 15. Papeles y casco al día.',
-      tag: 'trafico',
-    },
-    {
-      label: '🍔 Despacho Rápido',
-      text: 'En el restaurante de la 93 están despachando express en 3 minutos sin fila.',
-      tag: 'tienda',
-    },
-    {
-      label: '⚡ Tarifa Dinámica',
-      text: 'Se activó multiplicador x1.4 en Parque 93, hay alta demanda de pedidos.',
-      tag: 'alerta',
-    },
-    {
-      label: '⚠️ Trancón Pesado',
-      text: 'Vía principal colapsada por camión varado, les sugiero desviar por la carrera 11.',
-      tag: 'trafico',
-    },
+    { label: 'Lluvia', text: 'Está lloviendo en mi sector. Conduzcan con cuidado.', tag: 'clima' },
+    { label: 'Congestión', text: 'Hay congestión en mi ruta. Revisen el tráfico antes de salir.', tag: 'trafico' },
   ];
 
   const handleQuickBroadcast = (text: string, tag: MessageTag) => {
@@ -269,15 +244,7 @@ export const CoworkerRadioModal: React.FC<CoworkerRadioModalProps> = ({
               <Text style={styles.testAudioText}>Probar Bip</Text>
             </TouchableOpacity>
 
-            {/* Simular Audio de Compañero */}
-            <TouchableOpacity
-              style={styles.simAudioBtn}
-              onPress={simulateIncomingCoworkerVoice}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="chatbubbles" size={16} color="#2196F3" />
-              <Text style={styles.simAudioText}>Simular Audio</Text>
-            </TouchableOpacity>
+
           </View>
 
           {/* Active Speaker Banner (Google Meet / Walkie-talkie style) */}
@@ -771,20 +738,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#FF441F',
-  },
-  simAudioBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E3F2FD',
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 8,
-    gap: 4,
-  },
-  simAudioText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#1976D2',
   },
   activeSpeakerBanner: {
     flexDirection: 'row',

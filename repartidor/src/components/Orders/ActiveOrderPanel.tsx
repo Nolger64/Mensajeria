@@ -1,21 +1,24 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Linking, ScrollView } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { DeliveryOrder, OrderItem } from '../../types';
+import { auraThemes, type AuraTheme } from '../../../../src/theme/auraTheme';
+import { useAuraTheme } from '../../../../src/theme/AuraThemeProvider';
+import { AuraInput } from '../../../../src/components/AuraInput';
 
 interface ActiveOrderPanelProps {
   order: DeliveryOrder;
-  onAdvanceOrderStep: () => void;
-  onCompleteDelivery: () => void;
-  onCancelOrder: () => void;
+  onAdvanceOrderStep: () => Promise<boolean>;
+  onCompleteDelivery: (pin: string) => Promise<boolean>;
 }
 
 export const ActiveOrderPanel: React.FC<ActiveOrderPanelProps> = ({
   order,
   onAdvanceOrderStep,
   onCompleteDelivery,
-  onCancelOrder,
 }) => {
+  const { mode, theme: { colors } } = useAuraTheme();
+  const styles = stylesByMode[mode];
   const [items, setItems] = useState<OrderItem[]>(order.items);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
@@ -30,12 +33,22 @@ export const ActiveOrderPanel: React.FC<ActiveOrderPanelProps> = ({
 
   const formatCurrency = (val: number) => '$' + val.toLocaleString('es-CO');
 
-  const handleConfirmPin = () => {
-    if (pinInput === order.securityPin || pinInput === '1234') {
-      onCompleteDelivery();
-    } else {
-      setPinError(true);
+  const [saving, setSaving] = useState(false);
+
+  const handleAdvance = async () => {
+    if (saving) return;
+    setSaving(true);
+    if (!await onAdvanceOrderStep()) {
+      Alert.alert('No se pudo actualizar el pedido', 'Inténtalo de nuevo.');
     }
+    setSaving(false);
+  };
+
+  const handleConfirmPin = async () => {
+    if (saving || pinInput.length !== 4) return;
+    setSaving(true);
+    setPinError(!await onCompleteDelivery(pinInput));
+    setSaving(false);
   };
 
   return (
@@ -94,7 +107,7 @@ export const ActiveOrderPanel: React.FC<ActiveOrderPanelProps> = ({
             </View>
 
             <View style={styles.instructionsBox}>
-              <Ionicons name="information-circle-outline" size={20} color="#FF441F" />
+              <Ionicons name="information-circle-outline" size={20} color={colors.accent} />
               <Text style={styles.instructionsText}>
                 Dirígete al mostrador prioritario FHS. Muestra el código{' '}
                 <Text style={styles.bold}>{order.orderCode}</Text> al cajero.
@@ -108,10 +121,11 @@ export const ActiveOrderPanel: React.FC<ActiveOrderPanelProps> = ({
 
             <TouchableOpacity
               style={styles.primaryActionButton}
-              onPress={onAdvanceOrderStep}
+              onPress={handleAdvance}
+                disabled={saving}
               activeOpacity={0.85}
             >
-              <Ionicons name="location-outline" size={20} color="#FFFFFF" />
+              <Ionicons name="location-outline" size={20} color={colors.onAccent} />
               <Text style={styles.primaryActionText}>Ya llegué a la tienda</Text>
             </TouchableOpacity>
           </View>
@@ -138,7 +152,7 @@ export const ActiveOrderPanel: React.FC<ActiveOrderPanelProps> = ({
                   <MaterialCommunityIcons
                     name={item.checked ? 'checkbox-marked-circle' : 'checkbox-blank-circle-outline'}
                     size={24}
-                    color={item.checked ? '#00C853' : '#BDBDBD'}
+                    color={item.checked ? colors.textPrimary : colors.iconMuted}
                   />
                   <View style={styles.itemInfo}>
                     <Text style={[styles.itemName, item.checked && styles.itemCheckedText]}>
@@ -156,11 +170,11 @@ export const ActiveOrderPanel: React.FC<ActiveOrderPanelProps> = ({
                 styles.primaryActionButton,
                 !allItemsChecked && styles.primaryActionButtonDisabled,
               ]}
-              onPress={onAdvanceOrderStep}
-              disabled={!allItemsChecked}
+              onPress={handleAdvance}
+              disabled={saving || !allItemsChecked}
               activeOpacity={0.85}
             >
-              <MaterialCommunityIcons name="bag-checked" size={20} color="#FFFFFF" />
+              <MaterialCommunityIcons name="bag-checked" size={20} color={colors.onAccent} />
               <Text style={styles.primaryActionText}>
                 {allItemsChecked ? 'Pedido Recolectado (Iniciar Ruta)' : 'Marca todos los productos'}
               </Text>
@@ -173,7 +187,7 @@ export const ActiveOrderPanel: React.FC<ActiveOrderPanelProps> = ({
           <View style={styles.stepContent}>
             <View style={styles.destinationHeader}>
               <View style={styles.customerIconBox}>
-                <Ionicons name="person" size={24} color="#FFFFFF" />
+                <Ionicons name="person-outline" size={24} color={colors.textPrimary} />
               </View>
               <View style={styles.destinationTextCol}>
                 <Text style={styles.subLabel}>Cliente final:</Text>
@@ -184,7 +198,7 @@ export const ActiveOrderPanel: React.FC<ActiveOrderPanelProps> = ({
 
             {/* Customer Notes */}
             <View style={styles.customerNoteBox}>
-              <Ionicons name="document-text-outline" size={18} color="#FF9100" />
+              <Ionicons name="document-text-outline" size={18} color={colors.alertText} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.noteTitle}>Nota de entrega:</Text>
                 <Text style={styles.noteText}>{order.customerNotes}</Text>
@@ -192,54 +206,46 @@ export const ActiveOrderPanel: React.FC<ActiveOrderPanelProps> = ({
             </View>
 
             {/* Quick Contact Buttons */}
-            <View style={styles.contactButtonsRow}>
+            {!!order.customerPhone && (
               <TouchableOpacity
                 style={styles.contactBtn}
-                onPress={() => Alert.alert('Llamada', `Marcando a ${order.customerName}: ${order.customerPhone}`)}
-                activeOpacity={0.8}
+                onPress={() => Linking.openURL(`tel:${order.customerPhone}`).catch(() =>
+                  Alert.alert('No se pudo abrir el teléfono', order.customerPhone))}
               >
-                <Ionicons name="call" size={18} color="#00C853" />
-                <Text style={styles.contactBtnText}>Llamar</Text>
+                <Ionicons name="call" size={18} color={colors.iconMuted} />
+                <Text style={styles.contactBtnText}>Llamar al cliente</Text>
               </TouchableOpacity>
+            )}
 
-              <TouchableOpacity
-                style={styles.contactBtn}
-                onPress={() => Alert.alert('Chat con Cliente', `Abriendo chat seguro con ${order.customerName}`)}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="chatbubble-ellipses" size={18} color="#2979FF" />
-                <Text style={styles.contactBtnText}>Chat de Entrega</Text>
-              </TouchableOpacity>
-            </View>
+            {order.totalToPay !== undefined && (
+              <Text style={styles.pinPrompt}>Cobrar contraentrega: {formatCurrency(order.totalToPay)}</Text>
+            )}
 
-            {/* Security PIN verification */}
             <View style={styles.pinSection}>
-              <Text style={styles.pinPrompt}>
-                Ingresa el código PIN de entrega del cliente (o prueba con {order.securityPin}):
-              </Text>
-              <View style={styles.pinInputRow}>
-                {['4', '8', '2', '1'].map((digit, idx) => (
-                  <TouchableOpacity
-                    key={idx}
-                    style={styles.pinPresetBtn}
-                    onPress={() => {
-                      setPinInput(order.securityPin);
-                      setPinError(false);
-                    }}
-                  >
-                    <Text style={styles.pinPresetText}>{digit}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              {pinError && <Text style={styles.pinErrorText}>Código PIN incorrecto</Text>}
+              <Text style={styles.pinPrompt}>Ingresa el código que te indique el cliente.</Text>
+              <AuraInput
+                style={styles.pinInput}
+                value={pinInput}
+                onChangeText={(value) => {
+                  setPinInput(value.replace(/[^0-9]/g, ''));
+                  setPinError(false);
+                }}
+                accessibilityLabel="Código de entrega"
+                keyboardType="number-pad"
+                secureTextEntry
+                maxLength={4}
+                editable={!saving}
+              />
+              {pinError && <Text style={styles.pinErrorText}>No se pudo validar el código. Revisa el número e inténtalo de nuevo.</Text>}
             </View>
 
             <TouchableOpacity
               style={styles.primaryActionButton}
               onPress={handleConfirmPin}
+              disabled={saving || pinInput.length !== 4}
               activeOpacity={0.85}
             >
-              <MaterialCommunityIcons name="check-decagram" size={20} color="#FFFFFF" />
+              <MaterialCommunityIcons name="check-decagram" size={20} color={colors.onAccent} />
               <Text style={styles.primaryActionText}>Confirmar y Entregar Pedido</Text>
             </TouchableOpacity>
           </View>
@@ -249,301 +255,285 @@ export const ActiveOrderPanel: React.FC<ActiveOrderPanelProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 8,
-    maxHeight: 380,
-    minHeight: 280,
-  },
-  topStatusBanner: {
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  statusRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  stepBadge: {
-    backgroundColor: '#FFE9E4',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  stepBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#FF441F',
-    letterSpacing: 0.4,
-  },
-  orderCode: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#1A1D20',
-  },
-  progressLine: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  progressSegment: {
-    flex: 1,
-    height: 4,
-    backgroundColor: '#E0E0E0',
-    borderRadius: 2,
-  },
-  segmentActive: {
-    backgroundColor: '#FF441F',
-  },
-  contentScroll: {
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-  },
-  stepContent: {
-    gap: 12,
-  },
-  destinationHeader: {
-    flexDirection: 'row',
-    gap: 14,
-    alignItems: 'center',
-  },
-  storeEmojiBox: {
-    width: 50,
-    height: 50,
-    borderRadius: 14,
-    backgroundColor: '#FFF0ED',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#FF441F',
-  },
-  storeEmojiText: {
-    fontSize: 26,
-  },
-  customerIconBox: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#1A1D20',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  destinationTextCol: {
-    flex: 1,
-  },
-  subLabel: {
-    fontSize: 11,
-    color: '#757575',
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  destName: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#1A1D20',
-    marginTop: 1,
-  },
-  destAddress: {
-    fontSize: 12,
-    color: '#616161',
-    marginTop: 1,
-  },
-  instructionsBox: {
-    flexDirection: 'row',
-    backgroundColor: '#FFF8F6',
-    padding: 12,
-    borderRadius: 12,
-    gap: 10,
-    alignItems: 'center',
-  },
-  instructionsText: {
-    flex: 1,
-    fontSize: 12,
-    color: '#424242',
-    lineHeight: 18,
-  },
-  bold: {
-    fontWeight: '800',
-    color: '#1A1D20',
-  },
-  earningsSummaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#FAFAFA',
-    padding: 12,
-    borderRadius: 12,
-  },
-  summaryLabel: {
-    fontSize: 12,
-    color: '#616161',
-    fontWeight: '600',
-  },
-  summaryValue: {
-    fontSize: 17,
-    fontWeight: '900',
-    color: '#00C853',
-  },
-  checklistHeader: {
-    marginBottom: 4,
-  },
-  checklistTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#1A1D20',
-  },
-  checklistSubtitle: {
-    fontSize: 12,
-    color: '#757575',
-    marginTop: 2,
-  },
-  itemsList: {
-    gap: 8,
-  },
-  itemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8F9FA',
-    padding: 12,
-    borderRadius: 12,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: '#EEEEEE',
-  },
-  itemRowChecked: {
-    backgroundColor: '#E8F5E9',
-    borderColor: '#C8E6C9',
-  },
-  itemInfo: {
-    flex: 1,
-  },
-  itemName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1A1D20',
-  },
-  itemCheckedText: {
-    textDecorationLine: 'line-through',
-    color: '#757575',
-  },
-  itemNotes: {
-    fontSize: 11,
-    color: '#757575',
-    marginTop: 2,
-  },
-  itemPrice: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#424242',
-  },
-  customerNoteBox: {
-    flexDirection: 'row',
-    backgroundColor: '#FFF9C4',
-    padding: 12,
-    borderRadius: 12,
-    gap: 10,
-  },
-  noteTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#F57F17',
-    marginBottom: 2,
-  },
-  noteText: {
-    fontSize: 12,
-    color: '#424242',
-    lineHeight: 17,
-  },
-  contactButtonsRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  contactBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F5F5F5',
-    paddingVertical: 10,
-    borderRadius: 10,
-    gap: 8,
-  },
-  contactBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1A1D20',
-  },
-  pinSection: {
-    backgroundColor: '#FAFAFA',
-    padding: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  pinPrompt: {
-    fontSize: 12,
-    color: '#616161',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  pinInputRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  pinPresetBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#FF441F',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pinPresetText: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#FF441F',
-  },
-  pinErrorText: {
-    fontSize: 11,
-    color: '#D32F2F',
-    fontWeight: '700',
-    marginTop: 6,
-  },
-  primaryActionButton: {
-    backgroundColor: '#FF441F',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 15,
-    borderRadius: 16,
-    gap: 8,
-    marginTop: 4,
-    marginBottom: 16,
-    shadowColor: '#FF441F',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 3,
-  },
-  primaryActionButtonDisabled: {
-    backgroundColor: '#BDBDBD',
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  primaryActionText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-});
+function createStyles({ colors, font, borderRadius }: AuraTheme) {
+  return StyleSheet.create({
+    container: {
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      width: '100%',
+      maxWidth: 780,
+      alignSelf: 'center',
+      flex: 1,
+    },
+    topStatusBanner: {
+      paddingHorizontal: 20,
+      paddingTop: 14,
+      paddingBottom: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.borderLight,
+    },
+    statusRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    stepBadge: {
+      backgroundColor: colors.support,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 8,
+    },
+    stepBadgeText: {
+      fontSize: 11,
+      fontFamily: font.regular,
+      color: colors.accent,
+      letterSpacing: 0.4,
+    },
+    orderCode: {
+      fontSize: 13,
+      fontFamily: font.regular,
+      color: colors.textPrimary,
+    },
+    progressLine: {
+      flexDirection: 'row',
+      gap: 6,
+    },
+    progressSegment: {
+      flex: 1,
+      height: 3,
+      backgroundColor: colors.support,
+      borderRadius: 2,
+    },
+    segmentActive: {
+      backgroundColor: colors.accent,
+    },
+    contentScroll: {
+      paddingHorizontal: 20,
+      paddingVertical: 14,
+    },
+    stepContent: {
+      gap: 12,
+    },
+    destinationHeader: {
+      flexDirection: 'row',
+      gap: 14,
+      alignItems: 'center',
+    },
+    storeEmojiBox: {
+      width: 50,
+      height: 50,
+      borderRadius: 14,
+      backgroundColor: colors.accentWash,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: colors.borderMedium,
+    },
+    storeEmojiText: {
+      fontSize: 26,
+    },
+    customerIconBox: {
+      width: 50,
+      height: 50,
+      borderRadius: 25,
+      backgroundColor: colors.accentMuted,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    destinationTextCol: {
+      flex: 1,
+    },
+    subLabel: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      fontFamily: font.regular,
+      textTransform: 'uppercase',
+    },
+    destName: {
+      fontSize: 16,
+      fontFamily: font.regular,
+      color: colors.textPrimary,
+      marginTop: 1,
+    },
+    destAddress: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      marginTop: 1,
+    },
+    instructionsBox: {
+      flexDirection: 'row',
+      backgroundColor: colors.support,
+      padding: 12,
+      borderRadius: 12,
+      gap: 10,
+      alignItems: 'center',
+    },
+    instructionsText: {
+      flex: 1,
+      fontSize: 12,
+      color: colors.textPrimary,
+      lineHeight: 18,
+    },
+    bold: {
+      fontFamily: font.regular,
+      color: colors.textPrimary,
+    },
+    earningsSummaryRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      backgroundColor: colors.surfaceSubtle,
+      padding: 12,
+      borderRadius: 12,
+    },
+    summaryLabel: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      fontFamily: font.regular,
+    },
+    summaryValue: {
+      fontSize: 17,
+      fontFamily: font.regular,
+      color: colors.accent,
+    },
+    checklistHeader: {
+      marginBottom: 4,
+    },
+    checklistTitle: {
+      fontSize: 15,
+      fontFamily: font.regular,
+      color: colors.textPrimary,
+    },
+    checklistSubtitle: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      marginTop: 2,
+    },
+    itemsList: {
+      gap: 8,
+    },
+    itemRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surfaceSubtle,
+      padding: 12,
+      borderRadius: 12,
+      gap: 12,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+    },
+    itemRowChecked: {
+      backgroundColor: colors.accentWash,
+      borderColor: colors.borderMedium,
+    },
+    itemInfo: {
+      flex: 1,
+    },
+    itemName: {
+      fontSize: 13,
+      fontFamily: font.regular,
+      color: colors.textPrimary,
+    },
+    itemCheckedText: {
+      textDecorationLine: 'line-through',
+      color: colors.textSecondary,
+    },
+    itemNotes: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      marginTop: 2,
+    },
+    itemPrice: {
+      fontSize: 12,
+      fontFamily: font.regular,
+      color: colors.textPrimary,
+    },
+    customerNoteBox: {
+      borderWidth: 1,
+      borderColor: colors.alertBorder,
+      flexDirection: 'row',
+      backgroundColor: colors.surfaceSubtle,
+      padding: 12,
+      borderRadius: 12,
+      gap: 10,
+    },
+    noteTitle: {
+      fontSize: 11,
+      fontFamily: font.regular,
+      color: colors.alertText,
+      marginBottom: 2,
+    },
+    noteText: {
+      fontSize: 12,
+      color: colors.textPrimary,
+      lineHeight: 17,
+    },
+    contactBtn: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.support,
+      paddingVertical: 10,
+      borderRadius: borderRadius.full,
+      gap: 8,
+    },
+    contactBtnText: {
+      fontSize: 12,
+      fontFamily: font.regular,
+      color: colors.textPrimary,
+    },
+    pinSection: {
+      backgroundColor: colors.surfaceSubtle,
+      padding: 12,
+      borderRadius: 12,
+      alignItems: 'center',
+    },
+    pinPrompt: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      marginBottom: 8,
+    },
+    pinInput: {
+      minWidth: 138,
+      textAlign: 'center',
+      fontSize: 18,
+      letterSpacing: 6,
+    },
+    pinErrorText: {
+      fontSize: 11,
+      color: colors.alertText,
+      fontFamily: font.regular,
+      marginTop: 6,
+    },
+    primaryActionButton: {
+      backgroundColor: colors.accent,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 15,
+      borderRadius: borderRadius.full,
+      gap: 8,
+      marginTop: 4,
+      marginBottom: 16,
+    },
+    primaryActionButtonDisabled: {
+      backgroundColor: colors.support,
+    },
+    primaryActionText: {
+      fontSize: 15,
+      fontFamily: font.regular,
+      color: colors.onAccent,
+    },
+  });
+}
+
+const stylesByMode = {
+  light: createStyles(auraThemes.light),
+  dark: createStyles(auraThemes.dark),
+};

@@ -1,16 +1,17 @@
 {
   "expo": {
-    "name": "FHS Cliente",
+    "name": "Aura Spa · Tienda y citas",
     "slug": "fhs-cliente",
+    "scheme": "auraspa-cliente",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#FF441F"
+      "backgroundColor": "#454D46"
     },
     "ios": {
       "supportsTablet": true,
@@ -22,8 +23,9 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#FF441F"
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png",
+        "backgroundColor": "#454D46"
       },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
@@ -42,7 +44,8 @@
         {
           "locationAlwaysAndWhenInUsePermission": "FHS necesita tu ubicación para mostrarte tiendas cercanas y entregas a domicilio."
         }
-      ]
+      ],
+      "expo-router"
     ]
   }
 }

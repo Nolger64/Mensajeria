@@ -1,16 +1,17 @@
 {
   "expo": {
-    "name": "FHS Administrador",
+    "name": "Aura Spa · Administración",
     "slug": "fhs-administrador",
+    "scheme": "auraspa-admin",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#121418"
+      "backgroundColor": "#454D46"
     },
     "ios": {
       "supportsTablet": true,
@@ -22,8 +23,9 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#121418"
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png",
+        "backgroundColor": "#454D46"
       },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
@@ -42,7 +44,8 @@
         {
           "locationAlwaysAndWhenInUsePermission": "FHS Administrador necesita tu ubicación para centrar la flota y monitorear el mapa operativo."
         }
-      ]
+      ],
+      "expo-router"
     ]
   }
 }

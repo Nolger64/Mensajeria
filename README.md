@@ -1,169 +1,85 @@
-# 🛵 FHS Multi-Project Ecosystem (React Native + Node.js)
+# Aura Spa
 
-Estructura modular dividida en **5 carpetas independientes**:
+Aplicación de una cadena de spas para comprar productos de sus sedes y reservar citas de spa. El portal de Expo abre la interfaz correspondiente al rol de la cuenta.
 
-```
-videos/
-├── 🛒 cliente/          # Aplicación React Native Expo para el Usuario Final (Tienda & Domicilios Express)
-├── 🛵 repartidor/       # Aplicación React Native Expo para el Repartidor (Radar, Pedidos, Pines ⭐)
-├── 👔 administrador/    # Aplicación React Native Expo para la Torre de Control (Flota, Tiendas & Catálogos)
-├── 🧪 prueba/           # Aplicación React Native Expo de Pruebas y Sandbox
-├── 🖥️ servidor/         # Servidor Backend Central (Node.js + Express + REST API + SSE)
-└── 📄 package.json      # Orquestador con scripts para ejecutar cualquiera de los proyectos
-```
+## Roles
 
----
+| Rol | Acceso |
+| --- | --- |
+| Cliente | Crea su cuenta desde el portal. Compra productos de una sede, sigue sus pedidos y reserva, consulta, reprograma o cancela sus propias citas antes de la hora de inicio. |
+| Especialista | Consulta las citas que tiene asignadas y registra si atendió al cliente o si este no asistió, desde el inicio de la cita. |
+| Administración | Gestiona las sedes, el catálogo, los tratamientos y las sesiones. Crea, edita y elimina especialistas y repartidores. Consulta todas las citas, cancela las próximas o registra el resultado cuando corresponde. Asigna pedidos al equipo de reparto. |
+| Repartidor | Activa su disponibilidad, consulta las entregas asignadas y confirma la entrega con el PIN del cliente. La agenda está fuera de su acceso. |
 
-## 🖥️ 1. Servidor Central (`/servidor`)
+## Ejecutar Aura Spa con Supabase
 
-El servidor central mantiene la base de datos en memoria y sincroniza en tiempo real las 4 aplicaciones móviles a través de su API REST y eventos en vivo (SSE), con un **sistema robusto de autenticación, control de roles (RBAC) y cumplimiento de estándares de seguridad (OWASP)**:
+Expo consume la Edge Function `aura-api`. La función conserva las rutas de tienda, reparto y citas. Supabase Auth guarda y verifica las credenciales. La función usa la sesión de Aura Spa y comprueba el rol actual en cada solicitud protegida.
 
-### 🛡️ Seguridad y Roles (RBAC)
-- **Roles Soportados:** `administrador`, `repartidor`, `cliente`.
-- **Cifrado de Contraseñas:** `bcryptjs` con 10 rondas de salt (nunca se almacenan ni retornan contraseñas en texto plano).
-- **Estándar de Contraseñas (OWASP):** Mínimo 8 caracteres, al menos una mayúscula, una minúscula, un número y un caracter especial.
-- **Tokens de Sesión:** JSON Web Tokens (**JWT** estándar RFC 7519) con algoritmo `HS256`, cabecera `Authorization: Bearer <token>` y expiración configurable (24h).
-- **Cabeceras de Seguridad HTTP:** `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `X-XSS-Protection`, `Strict-Transport-Security`.
-- **Protección de Rutas por Rol:**
-  - `POST /api/stores`, `POST /api/stores/:id/products`, `PATCH /api/auth/users/:id/role`: Exclusivo **Administrador**.
-  - `POST /api/delivery-stars`, `PATCH /api/orders/:id/status`: **Repartidor** y **Administrador**.
-  - `POST /api/orders`: **Cliente** y **Administrador**.
+1. Desde la raíz, ejecuta `npm start`. Por defecto, Expo se conecta a la función desplegada en el proyecto Supabase de Aura Spa.
+2. Para apuntar a otro entorno, define `EXPO_PUBLIC_API_URL` en el `.env.local` de Expo con `https://TU_PROJECT_REF.supabase.co/functions/v1/aura-api`. Usa la misma variable en el entorno con el que generes el APK.
+3. Para usar la versión conectada a Supabase en Android, genera e instala un APK nuevo con el código actualizado.
 
-### 🔑 Cuentas Demo Preconfiguradas:
-| Rol | Nombre | Correo | Contraseña |
-| --- | --- | --- | --- |
-| 👔 **administrador** | Laura Gómez (Admin) | `admin@fhs.com` | `Admin123!` |
-| 🛵 **repartidor** | Carlos Mendoza (El Rayo) | `repartidor@fhs.com` | `Repartidor123!` |
-| 🛒 **cliente** | Santiago Ramírez | `cliente@fhs.com` | `Cliente123!` |
+PostgreSQL guarda la operación y la agenda en el esquema privado `aura_private`. Cada escritura se valida con el estado recién leído bajo un bloqueo de transacción. Esto evita que dos solicitudes ocupen al mismo tiempo el mismo horario. Las contraseñas y las claves del servidor se gestionan en Supabase. El APK recibe la URL pública.
 
-- **Endpoints de Autenticación:**
-  - `POST /api/auth/register` (Registro con validación OWASP)
-  - `POST /api/auth/login` (Inicio de sesión con JWT)
-  - `GET /api/auth/me` (Perfil del usuario autenticado)
-  - `PATCH /api/auth/profile` (Actualización de perfil y cambio de clave)
-  - `GET /api/auth/users` (Listado de usuarios - Solo Admin)
-  - `PATCH /api/auth/users/:id/role` (Cambiar rol - Solo Admin)
-  - `DELETE /api/auth/users/:id` (Eliminar usuario - Solo Admin)
-- **Dashboard Web de Control:** Abre `http://localhost:4000` en tu navegador para ver usuarios por rol, métricas en vivo y probar endpoints.
+Para replicar el despliegue en otro proyecto, aplica los archivos de `supabase/migrations` y despliega `supabase/functions/aura-api` con la configuración de `supabase/config.toml`. Crea la primera cuenta desde el portal y promueve su perfil a administrador con una operación privilegiada de base de datos. Comprueba primero que el ID corresponda a la cuenta elegida y que el proyecto aún no tenga un administrador. Las demás cuentas de equipo se gestionan desde la interfaz de administración.
 
-### Iniciar el servidor:
+En el proyecto de pruebas, las credenciales generadas para las cuatro cuentas se encuentran en `servidor/.env.supabase-prueba.local`, excluido de Git. `node servidor/verificar-supabase.js` verifica los cuatro roles, el CRUD de personal, la reserva simultánea, la reprogramación y la entrega de un pedido con PIN. El comando genera datos de prueba y debe apuntar al proyecto de pruebas.
+
+## Inicio local con SQLite
+
+Usa Node.js 22.13 o superior para el servidor y una versión de Node compatible con Expo SDK 57 para el cliente. Instala las dependencias desde la raíz.
+
 ```bash
-# Desde la raíz:
-npm run start:servidor
+npm install
+```
 
-# O dentro de la carpeta servidor:
-cd servidor
+Copia `servidor/.env.example` a `servidor/.env.local` y completa la configuración privada. Define juntas las tres variables `FHS_ADMIN_*` para crear la primera cuenta administradora. El servidor conserva esa cuenta en reinicios posteriores. Si reutilizas un entorno que usaba credenciales integradas, elige valores nuevos.
+
+| Variable | Uso |
+| --- | --- |
+| `JWT_SECRET` | Clave aleatoria privada de al menos 32 caracteres para firmar las sesiones. |
+| `FHS_ADMIN_NAME`, `FHS_ADMIN_EMAIL`, `FHS_ADMIN_PASSWORD` | Datos para crear la primera cuenta administradora. La contraseña requiere ocho caracteres como mínimo, con mayúscula, minúscula, número y símbolo. |
+| `PORT` | Puerto de la API. Valor predeterminado `4000`. |
+| `JWT_EXPIRES_IN` | Duración de la sesión. Valor predeterminado `24h`. |
+| `FHS_DATABASE_PATH` | Ruta de la base SQLite. Valor predeterminado `servidor/data/aura.sqlite`. |
+
+Desde la raíz, inicia la API y el portal en terminales separadas.
+
+```bash
+npm run start:servidor
 npm start
 ```
 
----
+Para usar la API local, define `EXPO_PUBLIC_API_URL` en el `.env.local` del proyecto Expo. Usa `http://localhost:4000` en web y en el simulador iOS, `http://10.0.2.2:4000` en el emulador Android o la dirección IP de tu computador en un teléfono conectado a la misma red. Las variables `EXPO_PUBLIC_*` quedan visibles en el paquete de la app. Guarda las claves y contraseñas en el entorno privado del servidor. [Variables de entorno en Expo](https://docs.expo.dev/guides/environment-variables/)
 
-## 🛒 2. Aplicación del Cliente (`/cliente`)
+También puedes abrir las ediciones individuales con `npm run start:cliente`, `npm run start:administrador` y `npm run start:repartidor`. En ese caso configura la URL pública en el `.env.local` de la carpeta correspondiente. El especialista entra por el portal principal.
 
-Aplicación móvil para el usuario final con experiencia completa de compra y mensajería express:
-- **Explorador de Tiendas y Comercios Aliados:** Filtro por categorías (Restaurantes, Supermercados, Farmacias, FHS Turbo 10m, Licores), buscador en tiempo real y badges de convenios (Diamante, Oro, Bonos).
-- **Catálogo de Productos por Tienda:** Menú completo con fotos/emojis, descripciones, precios en pesos colombianos y controles de cantidad (+/-).
-- **🛵 Pedir Servicio de Domicilio Express (Mandados):** Formulario para solicitar envíos directos (recogida y entrega de llaves, paquetes, compras urgentes), selección de tamaño, propina sugerida y método de pago (Tarjeta o Efectivo).
-- **Canasta de Compra y Checkout:** Desglose financiero (subtotal, tarifa de envío, propina al repartidor, total), selección de dirección y notas para el domiciliario ("Apto 502, timbrar al citófono").
-- **Rastreo en Tiempo Real:** Seguimiento paso a paso del pedido (Buscando repartidor ➡️ Rumbo a tienda ➡️ En tienda ➡️ En camino ➡️ Entregado), ficha del domiciliario asignado (nombre, vehículo, calificación, batería) y **PIN de seguridad de entrega**.
-- **Sincronización:** Botón e indicador de conexión con el Servidor Central (Puerto 4000).
+## Puesta en marcha de una sede
 
-### Iniciar el Cliente:
+1. En **Catálogo**, crea una sede de Aura Spa y registra sus productos disponibles.
+2. En **Agenda → Equipo** puedes agregar, editar o eliminar especialistas y repartidores. Los repartidores también se encuentran desde **Reparto → Gestionar repartidores**. Antes de eliminar una cuenta, resuelve sus citas activas o entregas en curso. Los pedidos ofrecidos y aún sin aceptar regresan a la cola de pendientes.
+3. En **Agenda → Horarios → Nuevo horario**, define la sede, la fecha de inicio, la fecha final y las horas diarias de trabajo en Bogotá. Elige los especialistas y los tratamientos que atenderán. Cuando el catálogo esté vacío, el horario se publica para **Consulta general**.
+4. El sistema divide cada tramo disponible en citas consecutivas según la duración del tratamiento elegido. De 8:00 a 12:00 caben cuatro citas de 60 minutos o dos de 90 minutos por especialista. La **Consulta general** dura 30 minutos y su precio se consulta en la sede.
+5. Solo se muestran citas completas que caben en el horario del mismo especialista y quedan libres de reservas. Si el horario elegido para reprogramar ya está ocupado, se conserva la cita original.
+
+El servidor controla los cruces de horarios del especialista entre sedes y los cruces del cliente entre citas. Cancelar una cita futura vuelve a liberar el horario. Las citas se pagan en la sede y los pedidos de la tienda se pagan en efectivo contraentrega.
+
+## Datos y pruebas
+
+En modo local, SQLite conserva cuentas, sedes, productos, pedidos y agenda al reiniciar. Ejecuta una sola instancia de la API por archivo de base de datos. Los datos reales se cargan desde administración.
+
+### Agenda de prueba local
+
+Ejecuta `npm run agenda:prueba` desde la raíz para iniciar la API de prueba en el puerto 4100 y abrir el portal Expo en `http://localhost:8094`. Para preparar la base sin iniciar el portal, usa `npm run agenda:prueba -- --solo-datos`.
+
+El comando usa `servidor/data/agenda-prueba.sqlite`, una sede de demostración y cuatro cuentas autenticadas de administrador, repartidor, cliente y especialista. Publica horarios de 8:00 a 12:00 y de 14:00 a 18:00 para los próximos dos días en Bogotá, con Consulta general y tratamientos de 60 y 90 minutos. Puedes reiniciar el portal sin duplicar esos horarios.
+
+La configuración local se lee de `servidor/.env.agenda-prueba.local`, excluido de Git. Para recrearla en otra máquina, define las parejas `FHS_PRUEBA_<ROL>_EMAIL` y `FHS_PRUEBA_<ROL>_PASSWORD` para `ADMIN`, `REPARTIDOR`, `CLIENTE` y `ESPECIALISTA`, y una clave independiente `FHS_PRUEBA_JWT_SECRET` de al menos 32 caracteres.
+
+Para practicar con datos ficticios, ejecuta `npm run web:prueba` contra un servidor separado con `FHS_SANDBOX=true`, su propia clave y otro puerto. Este modo escucha en la interfaz local, usa una base en memoria y habilita el laboratorio de entregas de Aura Spa. En producción, el laboratorio permanece deshabilitado. El apartado de citas siempre exige una sesión del rol correspondiente.
+
 ```bash
-# Desde la raíz:
-npm run web:cliente
-# o
-npm run start:cliente
-
-# O dentro de la carpeta cliente:
-cd cliente
-npm run web      # Navegador
-npm run ios      # Simulador iOS
-npm run android  # Emulador Android
+npx expo lint
+npx tsc --noEmit
+node --test servidor/spa.test.js
 ```
-
----
-
-## 🛵 3. Aplicación del Repartidor (`/repartidor`)
-
-Aplicación móvil para el mensajero con:
-- Mapa interactivo de radar con comercios aliados (**Convenios Diamante, Oro, Plata**) y bonificaciones.
-- Ubicación de compañeros en vivo con indicador de vehículo (🏍️ Moto, 🚲 Bici), estado, batería e intercomunicador.
-- **Pines de Entrega con Estrellita (⭐):** Al completar una entrega, el domiciliario puede calificar la dirección con una estrellita y dejar notas y tips (ej. *"Don Pedro en portería recibe", "Ascensor izquierdo más rápido", "Parqueadero de motos techado"*) para que los futuros domiciliarios ubiquen el punto en el mapa al instante.
-- Notificación de nuevo pedido con cuenta regresiva de 30 segundos.
-- HUD de navegación de 3 pasos (Rumbo al comercio -> Checklist de productos -> Entrega al cliente con validación por PIN).
-- Canal de radio comunitaria, historial de entregas y retiros inmediatos a Nequi.
-
-### Iniciar el Repartidor:
-```bash
-# Desde la raíz:
-npm run web:repartidor
-# o
-npm run start:repartidor
-
-# O dentro de la carpeta repartidor:
-cd repartidor
-npm run web      # Navegador
-npm run ios      # Simulador iOS
-npm run android  # Emulador Android
-```
-
----
-
-## 👔 4. Aplicación del Administrador (`/administrador`)
-
-Torre de control para gerentes y despachadores:
-- **KPIs en Vivo:** Total de repartidores activos, disponibles vs en ruta, pedidos en curso y facturación.
-- **Mapa Satelital de Flota:** Monitoreo de todos los trabajadores en la ciudad, comercios y trazado de rutas activas.
-- **Gestión de Tiendas y Catálogos:** Pestaña dedicada para crear comercios, editar nombres, direcciones, categorías, tiers y coordenadas geográficas, además de agregar, editar o eliminar productos del catálogo de cada tienda.
-- **Visualizador de Ubicaciones Recientes y Pines ⭐:** Pestaña para inspeccionar todas las direcciones marcadas con estrellitas y tips dejados por los domiciliarios.
-- **Torre de Despacho:** Supervisión y **reasignación manual** de pedidos a couriers disponibles.
-- **Aviso Masivo (Broadcast):** Envío de comunicados prioritarios a todos los repartidores.
-
-### Iniciar el Administrador:
-```bash
-# Desde la raíz:
-npm run web:administrador
-# o
-npm run start:administrador
-
-# O dentro de la carpeta administrador:
-cd administrador
-npm run web      # Navegador
-npm run ios      # Simulador iOS
-npm run android  # Emulador Android
-```
-
----
-
-## 🧪 5. Aplicación de Pruebas / Sandbox (`/prueba`)
-
-Entorno de pruebas y simulación para generar datos en vivo:
-- **Creador de Tiendas con Convenio:** Registra nuevos comercios en el mapa con categoría, nivel de convenio, bonos y coordenadas. ¡Se reflejan de inmediato en el servidor, en el cliente y en el admin!
-- **Creador de Repartidores de Prueba:** Despliega nuevos trabajadores con vehículo (moto, bici, auto), estado inicial y batería.
-- **Despachador de Pedidos de Prueba:** Genera pedidos personalizados y dispáralos directamente a la app del repartidor para probar el flujo de aceptación.
-- **Simuladores en Vivo:**
-  - ⚡ *Simular Movimiento GPS*: Mueve la posición de toda la flota en el mapa.
-  - 🌧️ *Alerta de Clima*: Envía reporte de lluvia a la radio.
-  - 🚨 *Alerta de Tránsito*: Alerta de control vial.
-  - 🔄 *Restablecer Datos*: Vuelve a los valores demo originales.
-
-### Iniciar la App de Pruebas:
-```bash
-# Desde la raíz:
-npm run web:prueba
-# o
-npm run start:prueba
-
-# O dentro de la carpeta prueba:
-cd prueba
-npm run web      # Navegador
-npm run ios      # Simulador iOS
-npm run android  # Emulador Android
-```
-
----
-
-## 🌐 Conexión en Red Local o Internet
-
-Cada aplicación React Native incluye un indicador y selector de conexión en la parte superior donde se conecta automáticamente al servidor central en `http://localhost:4000` (o `http://10.0.2.2:4000` en emuladores Android). También permite ingresar una IP local o dominio en la nube (ejemplo: `http://192.168.1.45:4000` o `https://tu-servidor-fhs.com`).

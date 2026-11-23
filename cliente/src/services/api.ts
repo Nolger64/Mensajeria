@@ -1,11 +1,9 @@
-import { Platform } from 'react-native';
-import { PartnerStore, Product, DeliveryOrder, Coworker, DeliveryStar, User, AuthResponse } from '../types';
-
-const DEFAULT_SERVER_URL =
-  Platform.OS === 'android' ? 'http://10.0.2.2:4000' : 'http://localhost:4000';
+import { API_URL } from '../../../src/services/apiConfig';
+import { apiRequest } from '../../../src/services/apiRequest';
+import { PartnerStore, Product, DeliveryOrder, Coordinates, Coworker, DeliveryStar, User, AuthResponse } from '../types';
 
 export class FHSApiService {
-  private static baseUrl = DEFAULT_SERVER_URL;
+  private static baseUrl = API_URL;
   private static authToken: string | null = null;
 
   public static setServerUrl(url: string) {
@@ -106,11 +104,19 @@ export class FHSApiService {
     return this.request<DeliveryOrder[]>('/api/orders');
   }
 
-  public static async createOrder(order: Partial<DeliveryOrder>): Promise<DeliveryOrder | null> {
-    return this.request<DeliveryOrder>('/api/orders', {
+  public static async createOrder(order: {
+    storeId: string;
+    customerAddress: string;
+    customerNotes: string;
+    customerCoordinates?: Coordinates;
+    customerTip: number;
+    expectedTotal: number;
+    items: { id: string; quantity: number }[];
+  }): Promise<DeliveryOrder | null> {
+    return apiRequest<DeliveryOrder>('/api/orders', this.authToken ?? undefined, {
       method: 'POST',
       body: JSON.stringify(order),
-    });
+    }, this.baseUrl);
   }
 
   // ==========================================

@@ -1,11 +1,12 @@
 {
   "expo": {
-    "name": "videos",
+    "name": "Aura Spa",
     "slug": "videos",
+    "scheme": "auraspa",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -15,10 +16,10 @@
       }
     },
     "android": {
+      "package": "com.auraspa.app",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#454D46",
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "permissions": [
@@ -40,7 +41,9 @@
         {
           "locationAlwaysAndWhenInUsePermission": "FHS necesita tu ubicación para el mapa y navegación."
         }
-      ]
+      ],
+      "expo-router",
+      "expo-status-bar"
     ]
   }
 }

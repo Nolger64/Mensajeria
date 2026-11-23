@@ -1,0 +1,10 @@
+{
+  "imports": {
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2",
+    "bcryptjs": "npm:bcryptjs@3.0.3",
+    "cors": "npm:cors@2.8.5",
+    "express": "npm:express@4.21.2",
+    "jsonwebtoken": "npm:jsonwebtoken@9.0.3",
+    "postgres": "npm:postgres@3.4.9"
+  }
+}

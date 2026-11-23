@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Coworker } from '../../types';
 
@@ -70,7 +70,7 @@ export const CoworkerDetailSheet: React.FC<CoworkerDetailSheetProps> = ({
                   <Ionicons name="close" size={20} color="#757575" />
                 </TouchableOpacity>
               </View>
-              <Text style={styles.aliasText}>"{coworker.nickname}"</Text>
+              <Text style={styles.aliasText}>&quot;{coworker.nickname}&quot;</Text>
 
               <View style={styles.statusPill}>
                 <View style={[styles.statusDot, { backgroundColor: statusColor }]} />

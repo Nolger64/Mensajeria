@@ -1,4 +1,5 @@
 export type StoreCategory = 
+  | 'spa'
   | 'todos'
   | 'restaurante' 
   | 'supermercado' 
@@ -112,7 +113,7 @@ export interface DeliveryOrder {
   customerPhone: string;
   customerAddress: string;
   customerNotes: string;
-  customerCoordinates: Coordinates;
+  customerCoordinates?: Coordinates;
   items: OrderItem[];
   basePay: number;
   customerTip: number;
@@ -122,7 +123,8 @@ export interface DeliveryOrder {
   distanceToCustomerKm: number;
   estimatedMinutes: number;
   paymentMethod: 'Tarjeta (Pagado)' | 'Efectivo contraentrega';
-  securityPin: string;
+  securityPin?: string;
+  totalToPay?: number;
   status: OrderStep;
   createdAt: string;
   assignedWorkerId?: string | null;
@@ -163,7 +165,7 @@ export interface DeliveryStar {
   createdAt: string;
 }
 
-export type UserRole = 'administrador' | 'repartidor' | 'cliente';
+export type UserRole = 'administrador' | 'repartidor' | 'cliente' | 'especialista';
 
 export interface User {
   id: string;

@@ -1,4 +1,5 @@
 export type StoreCategory = 
+  | 'spa'
   | 'todos'
   | 'restaurante' 
   | 'supermercado' 

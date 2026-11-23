@@ -8,7 +8,7 @@ import {
   ScrollView,
   TextInput,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { CommunityMessage, Coworker } from '../../types';
 
 interface CoworkerRadioModalProps {
@@ -29,7 +29,7 @@ export const CoworkerRadioModal: React.FC<CoworkerRadioModalProps> = ({
   activeCoworkerFilter,
 }) => {
   const [inputText, setInputText] = useState('');
-  const [selectedTag, setSelectedTag] = useState<'general' | 'trafico' | 'clima' | 'tienda' | 'alerta'>('general');
+  const selectedTag: 'general' | 'trafico' | 'clima' | 'tienda' | 'alerta' = 'general';
 
   const handleSend = () => {
     if (!inputText.trim()) return;

@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
-import { PartnerStore, Coworker, DeliveryOrder, StoreCategory, PartnerTier, VehicleType } from '../../types';
+import { PartnerStore, Coworker, DeliveryOrder, PartnerTier, VehicleType } from '../../types';
 
 type TestLabTab = 'triggers' | 'tienda' | 'trabajador' | 'pedido';
 
@@ -30,8 +30,7 @@ export const TestLabScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TestLabTab>('triggers');
 
   // Form State: New Store
-  const [storeName, setStoreName] = useState('Pizzería Trattoria Romana');
-  const [storeCategory, setStoreCategory] = useState<StoreCategory>('restaurante');
+  const [storeName, setStoreName] = useState('Aura Spa · Sede de desarrollo');
   const [storeTier, setStoreTier] = useState<PartnerTier>('diamond');
   const [storeBonus, setStoreBonus] = useState('3500');
   const [storeAddress, setStoreAddress] = useState('Cra. 13 #85-22, Zona Rosa');
@@ -67,19 +66,10 @@ export const TestLabScreen: React.FC = () => {
     }
 
     const preset = locationPresets[selectedPresetIndex];
-    const categoryIcons: Record<string, string> = {
-      restaurante: '🍕',
-      supermercado: '🛒',
-      farmacia: '💊',
-      turbo: '⚡',
-      express: '🏪',
-      licores: '🍾',
-    };
-
     const newStore: PartnerStore = {
       id: `store-${Date.now().toString().slice(-4)}`,
       name: storeName.trim(),
-      category: storeCategory,
+      category: 'spa',
       partnerTier: storeTier,
       rating: 4.9,
       reviewCount: 150,
@@ -94,11 +84,12 @@ export const TestLabScreen: React.FC = () => {
       hasBonus: Number(storeBonus) > 0,
       bonusAmount: Number(storeBonus) || 0,
       bonusDescription: `Bono +$${Number(storeBonus).toLocaleString('es-CO')} por convenio especial de prueba`,
-      logo: categoryIcons[storeCategory] || '🏪',
+      logo: '🌿',
       bannerColor: storeTier === 'diamond' ? '#007A33' : '#FF9100',
       openingHours: 'Abierto 24 Horas',
       phone: '+57 311 000 9988',
-      tags: ['Convenio Test', 'Despacho Rápido', 'Verificado'],
+      tags: ['Spa'],
+      products: [{ id: 'aceite-local', name: 'Aceite corporal', description: 'Aceite de masaje', price: 24000, emoji: '🌿', available: true }],
     };
 
     addStore(newStore);
@@ -154,7 +145,12 @@ export const TestLabScreen: React.FC = () => {
 
   // Handle Trigger Test Order
   const handleDispatchOrder = (target: 'repartidor' | 'fleet') => {
-    const selectedStore = stores[0];
+    const selectedStore = stores.find((store) => store.products?.some((product) => product.available));
+    const product = selectedStore?.products?.find((entry) => entry.available);
+    if (!selectedStore || !product) {
+      Alert.alert('Agrega un producto a la sede antes de crear el pedido.');
+      return;
+    }
     const newOrder: DeliveryOrder = {
       id: `ord-test-${Date.now().toString().slice(-4)}`,
       orderCode: `#FHS-T${Date.now().toString().slice(-3)}`,
@@ -162,15 +158,12 @@ export const TestLabScreen: React.FC = () => {
       customerName: customerName.trim(),
       customerPhone: '+57 312 888 7766',
       customerAddress: customerAddress.trim(),
-      customerNotes: 'Timbrar 2 veces. Pago ya verificado.',
+      customerNotes: 'Entrega de productos Aura Spa.',
       customerCoordinates: {
         latitude: 4.6780 + (Math.random() - 0.5) * 0.002,
         longitude: -74.0540 + (Math.random() - 0.5) * 0.002,
       },
-      items: [
-        { id: 't-1', name: 'Pedido Gourmet de Prueba (Especial)', quantity: 2, price: 34000, checked: false },
-        { id: 't-2', name: 'Bebida Premium Helada', quantity: 2, price: 12000, checked: false },
-      ],
+      items: [{ id: product.id, name: product.name, quantity: 1, price: product.price, checked: false }],
       basePay: Number(orderPay) - Number(orderTip),
       customerTip: Number(orderTip),
       partnerBonus: selectedStore.hasBonus ? selectedStore.bonusAmount : 2000,
@@ -178,7 +171,7 @@ export const TestLabScreen: React.FC = () => {
       distanceToStoreKm: 0.5,
       distanceToCustomerKm: 0.9,
       estimatedMinutes: 15,
-      paymentMethod: 'Tarjeta (Pagado)',
+      paymentMethod: 'Efectivo contraentrega',
       securityPin: '4821',
       status: target === 'repartidor' ? 'ofertado' : 'rumbo_tienda',
       createdAt: 'Generado en Sandbox',
@@ -370,21 +363,6 @@ export const TestLabScreen: React.FC = () => {
 
             <Text style={styles.fieldLabel}>Nombre del Comercio:</Text>
             <TextInput style={styles.input} value={storeName} onChangeText={setStoreName} />
-
-            <Text style={styles.fieldLabel}>Categoría de Establecimiento:</Text>
-            <View style={styles.pillsRow}>
-              {(['restaurante', 'supermercado', 'farmacia', 'turbo', 'express'] as const).map((cat) => (
-                <TouchableOpacity
-                  key={cat}
-                  style={[styles.pill, storeCategory === cat && styles.pillActive]}
-                  onPress={() => setStoreCategory(cat)}
-                >
-                  <Text style={[styles.pillText, storeCategory === cat && styles.pillTextActive]}>
-                    {cat.toUpperCase()}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
 
             <Text style={styles.fieldLabel}>Nivel de Convenio:</Text>
             <View style={styles.pillsRow}>

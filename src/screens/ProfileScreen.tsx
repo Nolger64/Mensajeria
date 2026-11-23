@@ -26,7 +26,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ driver: propDriver
             <Text style={styles.avatarBigEmoji}>🛵</Text>
           </View>
           <Text style={styles.profileName}>{driver.name}</Text>
-          <Text style={styles.profileAlias}>"{driver.alias}"</Text>
+          <Text style={styles.profileAlias}>&quot;{driver.alias}&quot;</Text>
 
           <View style={styles.levelBadge}>
             <Ionicons name="sparkles" size={14} color="#FFB300" />

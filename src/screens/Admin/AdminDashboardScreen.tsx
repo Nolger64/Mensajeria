@@ -9,10 +9,9 @@ import {
   Alert,
   Modal,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
 import { AdminFleetMap } from './AdminFleetMap';
-import { Coworker, DeliveryOrder } from '../../types';
 
 type AdminTab = 'mapa' | 'trabajadores' | 'pedidos' | 'broadcast';
 
@@ -367,7 +366,7 @@ export const AdminDashboardScreen: React.FC = () => {
                   </Text>
                   <View>
                     <Text style={styles.modalWorkerName}>{selectedWorker.name}</Text>
-                    <Text style={styles.modalWorkerSub}>"{selectedWorker.nickname}" • {selectedWorker.vehicleModel}</Text>
+                    <Text style={styles.modalWorkerSub}>&quot;{selectedWorker.nickname}&quot; • {selectedWorker.vehicleModel}</Text>
                   </View>
                 </View>
                 <TouchableOpacity onPress={() => setSelectedWorkerId(null)} style={styles.closeBtn}>

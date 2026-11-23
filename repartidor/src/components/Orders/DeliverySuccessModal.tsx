@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { DeliveryOrder } from '../../types';
 import { useApp } from '../../context/AppContext';
+import { auraThemes, type AuraTheme } from '../../../../src/theme/auraTheme';
+import { useAuraTheme } from '../../../../src/theme/AuraThemeProvider';
+import { AuraInput } from '../../../../src/components/AuraInput';
 
 interface DeliverySuccessModalProps {
   order: DeliveryOrder | null;
@@ -15,8 +18,10 @@ export const DeliverySuccessModal: React.FC<DeliverySuccessModalProps> = ({
   visible,
   onDismiss,
 }) => {
+  const { mode, reduceMotion, theme: { colors } } = useAuraTheme();
+  const styles = stylesByMode[mode];
   const { driver, addDeliveryStar } = useApp();
-  const [tipNotes, setTipNotes] = useState('⭐ Don Pedro en recepción recibe. Dejar moto en bahía derecha con candado.');
+  const [tipNotes, setTipNotes] = useState('');
   const [starSaved, setStarSaved] = useState(false);
 
   if (!order) return null;
@@ -24,7 +29,7 @@ export const DeliverySuccessModal: React.FC<DeliverySuccessModalProps> = ({
   const formatCurrency = (val: number) => '$' + val.toLocaleString('es-CO');
 
   const handleSaveStarPin = async () => {
-    if (!order) return;
+    if (!order.customerCoordinates || !tipNotes.trim()) return;
     await addDeliveryStar({
       address: order.customerAddress,
       coordinates: order.customerCoordinates,
@@ -36,7 +41,7 @@ export const DeliverySuccessModal: React.FC<DeliverySuccessModalProps> = ({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <Modal visible={visible} transparent animationType={reduceMotion ? 'none' : 'fade'}>
       <View style={styles.overlay}>
         <View style={styles.card}>
           {/* Confetti icon badge */}
@@ -45,11 +50,11 @@ export const DeliverySuccessModal: React.FC<DeliverySuccessModalProps> = ({
           </View>
 
           <Text style={styles.title}>¡Entrega Exitosa!</Text>
-          <Text style={styles.subtitle}>Pedido {order.orderCode} completado a tiempo</Text>
+          <Text style={styles.subtitle}>Pedido {order.orderCode} entregado</Text>
 
           {/* Earnings box */}
           <View style={styles.earningsBox}>
-            <Text style={styles.earningsLabel}>Acreditado a tu billetera FHS:</Text>
+            <Text style={styles.earningsLabel}>Ganancia de la entrega</Text>
             <Text style={styles.earningsValue}>+{formatCurrency(order.totalEarnings)}</Text>
             <View style={styles.detailsRow}>
               <Text style={styles.detailText}>Tarifa: {formatCurrency(order.basePay)}</Text>
@@ -65,6 +70,7 @@ export const DeliverySuccessModal: React.FC<DeliverySuccessModalProps> = ({
           </View>
 
           {/* Golden Star for fellow couriers */}
+          {order.customerCoordinates && (
           <View style={styles.starSection}>
             <View style={styles.starHeader}>
               <Text style={styles.starEmoji}>⭐</Text>
@@ -78,7 +84,7 @@ export const DeliverySuccessModal: React.FC<DeliverySuccessModalProps> = ({
 
             {!starSaved ? (
               <View style={styles.starForm}>
-                <TextInput
+                <AuraInput
                   style={styles.starInput}
                   value={tipNotes}
                   onChangeText={setTipNotes}
@@ -91,19 +97,20 @@ export const DeliverySuccessModal: React.FC<DeliverySuccessModalProps> = ({
                   onPress={handleSaveStarPin}
                   activeOpacity={0.85}
                 >
-                  <Ionicons name="star" size={16} color="#FFFFFF" />
+                  <Ionicons name="star-outline" size={16} color={colors.textPrimary} />
                   <Text style={styles.saveStarBtnText}>Guardar Estrellita en Mapa</Text>
                 </TouchableOpacity>
               </View>
             ) : (
               <View style={styles.starSuccessRow}>
-                <Ionicons name="checkmark-circle" size={18} color="#00C853" />
+                <Ionicons name="checkmark-circle" size={18} color={colors.accent} />
                 <Text style={styles.starSuccessText}>
                   ¡Estrellita guardada! Tus compañeros verán este punto dorado en su mapa.
                 </Text>
               </View>
             )}
           </View>
+          )}
 
           {/* Continue button */}
           <TouchableOpacity
@@ -114,7 +121,7 @@ export const DeliverySuccessModal: React.FC<DeliverySuccessModalProps> = ({
             }}
             activeOpacity={0.85}
           >
-            <MaterialCommunityIcons name="radar" size={20} color="#FFFFFF" />
+            <MaterialCommunityIcons name="radar" size={20} color={colors.onAccent} />
             <Text style={styles.continueBtnText}>Volver al Radar de Pedidos</Text>
           </TouchableOpacity>
         </View>
@@ -123,178 +130,178 @@ export const DeliverySuccessModal: React.FC<DeliverySuccessModalProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-  },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    width: '100%',
-    maxWidth: 440,
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  iconCircle: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: '#E8F5E9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-    borderWidth: 3,
-    borderColor: '#00C853',
-  },
-  partyEmoji: {
-    fontSize: 34,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#1A1D20',
-  },
-  subtitle: {
-    fontSize: 12,
-    color: '#757575',
-    marginTop: 2,
-    marginBottom: 12,
-  },
-  earningsBox: {
-    width: '100%',
-    backgroundColor: '#F1F8E9',
-    borderRadius: 16,
-    padding: 12,
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#C8E6C9',
-    marginBottom: 12,
-  },
-  earningsLabel: {
-    fontSize: 11,
-    color: '#33691E',
-    fontWeight: '700',
-  },
-  earningsValue: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: '#00C853',
-    marginVertical: 2,
-  },
-  detailsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
-  },
-  detailText: {
-    fontSize: 11,
-    color: '#558B2F',
-    fontWeight: '600',
-  },
-  tipText: {
-    fontSize: 11,
-    color: '#2E7D32',
-    fontWeight: '800',
-  },
-  bonusText: {
-    fontSize: 11,
-    color: '#FF441F',
-    fontWeight: '800',
-  },
-  dot: {
-    color: '#9CCC65',
-  },
-  starSection: {
-    width: '100%',
-    backgroundColor: '#FFFDE7',
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#FFF176',
-  },
-  starHeader: {
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  starEmoji: {
-    fontSize: 22,
-  },
-  starSectionTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#F57F17',
-  },
-  starSectionSubtitle: {
-    fontSize: 10,
-    color: '#757575',
-    marginTop: 1,
-  },
-  starForm: {
-    gap: 8,
-  },
-  starInput: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#FBC02D',
-    padding: 8,
-    fontSize: 11,
-    color: '#333333',
-  },
-  saveStarBtn: {
-    backgroundColor: '#FBC02D',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 6,
-  },
-  saveStarBtnText: {
-    color: '#1A1D20',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  starSuccessRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 6,
-  },
-  starSuccessText: {
-    fontSize: 11,
-    color: '#2E7D32',
-    fontWeight: '700',
-    flex: 1,
-  },
-  continueBtn: {
-    width: '100%',
-    backgroundColor: '#FF441F',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 14,
-    gap: 8,
-  },
-  continueBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-});
+function createStyles({ colors, font, borderRadius }: AuraTheme) {
+  return StyleSheet.create({
+    overlay: {
+      flex: 1,
+      backgroundColor: colors.backdrop,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+    },
+    card: {
+      backgroundColor: colors.surface,
+      borderRadius: borderRadius.xl,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      width: '100%',
+      maxWidth: 440,
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      paddingTop: 24,
+      paddingBottom: 20,
+    },
+    iconCircle: {
+      width: 68,
+      height: 68,
+      borderRadius: 34,
+      backgroundColor: colors.accentWash,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: colors.borderMedium,
+    },
+    partyEmoji: {
+      fontSize: 34,
+    },
+    title: {
+      fontSize: 20,
+      fontFamily: font.regular,
+      color: colors.textPrimary,
+    },
+    subtitle: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      marginTop: 2,
+      marginBottom: 12,
+    },
+    earningsBox: {
+      width: '100%',
+      backgroundColor: colors.surfaceSubtle,
+      borderRadius: 16,
+      padding: 12,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+      marginBottom: 12,
+    },
+    earningsLabel: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      fontFamily: font.regular,
+    },
+    earningsValue: {
+      fontSize: 28,
+      fontFamily: font.regular,
+      color: colors.accent,
+      marginVertical: 2,
+    },
+    detailsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 2,
+    },
+    detailText: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      fontFamily: font.regular,
+    },
+    tipText: {
+      fontSize: 11,
+      color: colors.accent,
+      fontFamily: font.regular,
+    },
+    bonusText: {
+      fontSize: 11,
+      color: colors.accent,
+      fontFamily: font.regular,
+    },
+    dot: {
+      color: colors.textSecondary,
+    },
+    starSection: {
+      width: '100%',
+      backgroundColor: colors.surfaceSubtle,
+      borderRadius: 14,
+      padding: 12,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: colors.alertBorder,
+    },
+    starHeader: {
+      flexDirection: 'row',
+      gap: 8,
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    starEmoji: {
+      fontSize: 22,
+    },
+    starSectionTitle: {
+      fontSize: 12,
+      fontFamily: font.regular,
+      color: colors.alertText,
+    },
+    starSectionSubtitle: {
+      fontSize: 10,
+      color: colors.textSecondary,
+      marginTop: 1,
+    },
+    starForm: {
+      gap: 8,
+    },
+    starInput: {
+      fontSize: 13,
+      backgroundColor: colors.surface,
+    },
+    saveStarBtn: {
+      backgroundColor: colors.accentMuted,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: 48,
+      paddingVertical: 8,
+      borderRadius: borderRadius.full,
+      gap: 6,
+    },
+    saveStarBtnText: {
+      color: colors.textPrimary,
+      fontSize: 11,
+      fontFamily: font.regular,
+    },
+    starSuccessRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingVertical: 6,
+    },
+    starSuccessText: {
+      fontSize: 11,
+      color: colors.accent,
+      fontFamily: font.regular,
+      flex: 1,
+    },
+    continueBtn: {
+      width: '100%',
+      backgroundColor: colors.accent,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 14,
+      borderRadius: borderRadius.full,
+      gap: 8,
+    },
+    continueBtnText: {
+      color: colors.onAccent,
+      fontSize: 14,
+      fontFamily: font.regular,
+    },
+  });
+}
+
+const stylesByMode = {
+  light: createStyles(auraThemes.light),
+  dark: createStyles(auraThemes.dark),
+};
