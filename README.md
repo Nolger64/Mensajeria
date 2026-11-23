@@ -2,6 +2,12 @@
 
 Aplicación de una cadena de spas para comprar productos de sus sedes y reservar citas de spa. El portal de Expo abre la interfaz correspondiente al rol de la cuenta.
 
+## Presentación del proyecto
+
+[Abrir la presentación interactiva de Aura Spa](https://nolger64.github.io/Mensajeria/)
+
+La presentación recorre la tienda, la agenda y los cuatro roles. GitHub Pages la actualiza cuando se suben cambios de `presentacion-aura/dist/` a `main`. Para volver a publicarla manualmente, abre **Actions → Publicar presentación en GitHub Pages → Run workflow** y selecciona `main`.
+
 ## Roles
 
 | Rol | Acceso |

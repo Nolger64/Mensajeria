@@ -27,7 +27,9 @@
         "ACCESS_FINE_LOCATION",
         "BLUETOOTH",
         "BLUETOOTH_ADMIN",
-        "BLUETOOTH_CONNECT"
+        "BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ],
       "predictiveBackGestureEnabled": false
     },
@@ -44,6 +46,12 @@
       ],
       "expo-router",
       "expo-status-bar"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "7c6db365-97be-4efd-8759-2fe8b3ad283c"
+      }
+    }
   }
 }

@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#182c25">
+  <meta name="description" content="Conoce Aura Spa, el proyecto universitario que conecta la agenda de tratamientos, la tienda y las entregas de una cadena de spas.">
+  <title>Aura Spa — Presentación del proyecto</title>
+  <link rel="icon" href="assets/flor.svg" type="image/svg+xml">
+  <link rel="preload" href="assets/instrument.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="assets/terapia.jpg" as="image">
+  <link rel="stylesheet" href="estilo.css">
+  <script src="recorrido.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#portada">Ir a la presentación</a>
+  <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="flor" viewBox="0 0 40 40"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M20 32C12 26 12 15 20 6c8 9 8 20 0 26Z"/><path d="M20 32C9 31 4 23 4 13c9 1 15 7 16 19Zm0 0c11-1 16-9 16-19-9 1-15 7-16 19Z"/><path d="M20 32c-8 2-15-1-19-7m19 7c8 2 15-1 19-7"/></g></symbol>
+    <symbol id="expand" viewBox="0 0 24 24"><path d="M8 4H4v4m12-4h4v4M4 16v4h4m12-4v4h-4"/></symbol>
+    <symbol id="menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h11"/></symbol>
+    <symbol id="play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7z" fill="currentColor" stroke-linejoin="round"/></symbol>
+    <symbol id="leaf" viewBox="0 0 24 24"><path d="M20 3C11 3 4 6 4 13a6 6 0 0 0 6 6c7 0 10-7 10-16ZM3 21l11-11"/></symbol>
+    <symbol id="bag" viewBox="0 0 24 24"><path d="M5 8h14l1 13H4L5 8Zm3 0V6a4 4 0 0 1 8 0v2"/></symbol>
+    <symbol id="cal" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 3v4m10-4v4M3 11h18m-14 5h4"/></symbol>
+    <symbol id="phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M10 18h4"/></symbol>
+    <symbol id="layers" viewBox="0 0 24 24"><path d="m12 3 10 5-10 5L2 8l10-5Zm-9 10 9 5 9-5M3 17l9 5 9-5"/></symbol>
+    <symbol id="base" viewBox="0 0 24 24"><ellipse cx="12" cy="5.5" rx="8" ry="3.5"/><path d="M4 6v12c0 4.5 16 4.5 16 0V6M4 12c0 4.5 16 4.5 16 0"/></symbol>
+    <symbol id="close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="plus" viewBox="0 0 24 24"><path d="M5 12h14m-7-7v14"/></symbol>
+  </svg>
+  <header class="topbar">
+    <a class="brand" href="#portada" aria-label="Aura Spa, portada"><svg aria-hidden="true"><use href="#flor"/></svg>Aura Spa</a>
+    <nav class="head-nav" aria-label="Secciones principales">
+      <a href="#portada">Portada</a><a href="#proyecto">El proyecto</a><a href="#aplicacion">La app</a><a href="#tecnologia">Tecnología</a>
+    </nav>
+    <div class="head-actions">
+      <button class="index-button" id="open-index" aria-label="Abrir índice" title="Abrir índice"><svg class="icon"><use href="#menu"/></svg><span>Índice</span></button>
+      <button class="fullscreen" id="fullscreen" title="Pantalla completa"><svg class="icon"><use href="#expand"/></svg><span>Pantalla completa</span></button>
+    </div>
+  </header>
+  <main id="recorrido" tabindex="-1" aria-label="Presentación de Aura Spa">
+    <section class="slide hero" id="portada" data-name="Portada" data-tone="dark" aria-labelledby="t-portada">
+      <div class="hero-photo"></div><div class="hero-veil"></div>
+      <div class="section-wrap hero-body">
+        <p class="eyebrow"><span></span>Proyecto universitario</p>
+        <h1 id="t-portada" tabindex="-1">El bienestar,<br>en tus <em>manos.</em></h1>
+        <p class="hero-intro">Aura Spa conecta las reservas, la tienda y las entregas de una cadena de spas en una sola aplicación móvil.</p>
+        <a class="button primary" href="#proyecto"><svg class="icon"><use href="#play"/></svg>Iniciar recorrido</a>
+      </div>
+    </section>
+    <section class="slide concept light" id="proyecto" data-name="El proyecto" data-tone="light" aria-labelledby="t-proyecto">
+      <div class="section-wrap two-col">
+        <div class="copy">
+          <p class="eyebrow"><span></span>El proyecto</p>
+          <h2 id="t-proyecto" tabindex="-1">De la cabina<br>a tu <em>casa.</em></h2>
+          <p class="lead">Una visita al spa empieza al elegir una cita y puede continuar en casa con los productos de la sede.</p>
+          <div class="feature"><svg class="icon"><use href="#cal"/></svg><div><h3>Reservar un tratamiento</h3><p>El cliente elige su sede y consulta los horarios que un especialista puede atender.</p></div></div>
+          <div class="feature"><svg class="icon"><use href="#bag"/></svg><div><h3>Comprar en la sede</h3><p>El pedido pasa del catálogo al reparto. El cliente sigue la entrega y la confirma con su PIN.</p></div></div>
+        </div>
+        <figure class="editorial-photo"><img src="assets/ritual.jpg" alt="Una vela encendida junto a piedras lisas y toallas de spa." width="850" height="1275"></figure>
+      </div>
+    </section>
+    <section class="slide app-slide light" id="aplicacion" data-name="La app" data-tone="light" aria-labelledby="t-app">
+      <div class="section-wrap two-col">
+        <div class="copy">
+          <p class="eyebrow"><span></span>La aplicación</p>
+          <h2 id="t-app" tabindex="-1">Aura Spa,<br><em>por dentro.</em></h2>
+          <p class="lead">Explora tres pantallas de la app tal como las ve un cliente.</p>
+          <div class="switches" aria-label="Pantalla de la aplicación" role="group">
+            <button data-screen="acceso" aria-pressed="false">Acceso</button><button data-screen="citas" aria-pressed="true">Reservas</button><button data-screen="tienda" aria-pressed="false">Tienda</button>
+          </div>
+          <p id="screen-detail" class="detail" aria-live="polite">Elige la fecha y revisa las horas libres antes de confirmar la cita.</p>
+        </div>
+        <div class="device-stage">
+          <div class="device-ring"></div>
+          <button id="enlarge" class="device" aria-label="Ampliar captura de reservas">
+            <img id="screen-img" src="assets/citas.png" alt="Pantalla de reservas con el especialista y las horas disponibles." width="585" height="1215">
+          </button>
+          <button id="zoom-caption" class="caption-button"><svg class="icon"><use href="#expand"/></svg>Ampliar captura</button>
+        </div>
+      </div>
+    </section>
+    <section class="slide schedule light" id="agenda" data-name="La agenda" data-tone="light" aria-labelledby="t-agenda">
+      <div class="section-wrap two-col">
+        <div class="copy">
+          <p class="eyebrow"><span></span>Agenda interactiva</p>
+          <h2 id="t-agenda" tabindex="-1">El tiempo de<br>cada <em>cita.</em></h2>
+          <p class="lead">Administración asigna especialistas a un horario. La duración del tratamiento determina cuántas citas completas caben.</p>
+          <p class="detail">Prueba este ejemplo con un turno de cuatro horas en Bogotá.</p>
+        </div>
+        <div class="agenda-panel">
+          <div class="panel-head"><svg class="icon"><use href="#cal"/></svg><div><h3>Turno de la mañana</h3><p>08:00 – 12:00 · Bogotá</p></div></div>
+          <p class="control-label" id="treatment-label">Tipo de cita</p>
+          <div class="treatments" role="group" aria-labelledby="treatment-label">
+            <button data-duration="30" aria-pressed="false">Consulta general <b>30 min</b></button>
+            <button data-duration="60" aria-pressed="true">Masaje relajante <b>60 min</b></button>
+            <button data-duration="90" aria-pressed="false">Ritual corporal <b>90 min</b></button>
+          </div>
+          <label class="toggle-label"><input id="specialist" type="checkbox" checked><span>Especialista disponible</span></label>
+          <div class="slots-state" aria-live="polite"><strong id="slot-count">4 citas disponibles</strong><div id="slots"></div></div>
+        </div>
+      </div>
+    </section>
+    <section class="slide roles" id="roles" data-name="Los roles" data-tone="dark" aria-labelledby="t-roles">
+      <div class="section-wrap two-col">
+        <div class="copy">
+          <p class="eyebrow"><span></span>Permisos por rol</p>
+          <h2 id="t-roles" tabindex="-1">Cuatro roles,<br>un solo <em>spa.</em></h2>
+          <p class="lead">La cuenta determina qué ve cada persona y qué acciones puede realizar. Selecciona un rol para ver su responsabilidad.</p>
+        </div>
+        <div class="roles-list">
+          <details open><summary>Cliente<svg class="icon"><use href="#plus"/></svg></summary><p>Compra productos de una sede, sigue sus pedidos y reserva, reprograma o cancela sus propias citas futuras.</p></details>
+          <details><summary>Especialista<svg class="icon"><use href="#plus"/></svg></summary><p>Consulta sus citas asignadas y, desde la hora de inicio, registra si atendió al cliente o si este faltó.</p></details>
+          <details><summary>Administración<svg class="icon"><use href="#plus"/></svg></summary><p>Gestiona sedes, catálogo, tratamientos y horarios. Crea, edita y elimina miembros del equipo, supervisa las citas y asigna pedidos.</p></details>
+          <details><summary>Repartidor<svg class="icon"><use href="#plus"/></svg></summary><p>Activa su disponibilidad, atiende las entregas asignadas y confirma cada entrega con el PIN del cliente.</p></details>
+        </div>
+      </div>
+    </section>
+    <section class="slide technology light" id="tecnologia" data-name="Tecnología" data-tone="light" aria-labelledby="t-tech">
+      <div class="section-wrap tech-layout">
+        <div class="copy">
+          <p class="eyebrow"><span></span>Arquitectura</p>
+          <h2 id="t-tech" tabindex="-1">Del móvil a<br><em>Supabase.</em></h2>
+          <p class="lead">El APK se conecta a Supabase por internet, incluso con el computador apagado.</p>
+          <div class="end-actions"><a class="button primary" href="https://expo.dev/artifacts/eas/TOms--7yZmPBJsrpzNSsNIhQO9Fj63hLiXXC3YMUGdk.apk"><svg class="icon"><use href="#phone"/></svg>Descargar APK</a><a class="text-link" href="#portada">Volver al inicio</a></div>
+        </div>
+        <a class="repo-qr" href="https://github.com/Nolger64/Mensajeria" target="_blank" rel="noopener">
+          <img src="assets/qr-code.png" alt="Código QR del repositorio de Aura Spa" width="1584" height="1584">
+          <span>Código fuente en GitHub</span>
+        </a>
+        <div class="architecture">
+          <div><span class="node"><svg class="icon"><use href="#phone"/></svg></span><div><h3>Expo y React Native</h3><p>Presentan la tienda, la agenda y el reparto según el rol de la cuenta.</p></div></div>
+          <div><span class="node"><svg class="icon"><use href="#layers"/></svg></span><div><h3>Auth y Edge Function</h3><p>Supabase Auth verifica las credenciales. La función valida los permisos de cada operación.</p></div></div>
+          <div><span class="node"><svg class="icon"><use href="#base"/></svg></span><div><h3>PostgreSQL</h3><p>Guarda los datos y protege cada reserva para evitar dos citas simultáneas en el mismo horario del especialista.</p></div></div>
+          <button class="credits-link" id="credits">Créditos de la presentación</button>
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer class="deck-footer">
+    <div class="location"><span id="current-number">01</span><span class="total">/ 06</span><i></i><span id="current-name">Portada</span></div>
+    <nav id="progress" aria-label="Navegar por la presentación"></nav>
+  </footer>
+  <dialog id="index-dialog" aria-labelledby="index-title">
+    <div class="dialog-heading"><h2 id="index-title">Recorrido</h2><button class="close" aria-label="Cerrar índice"><svg class="icon"><use href="#close"/></svg></button></div>
+    <nav id="index-list" aria-label="Índice de la presentación"></nav>
+  </dialog>
+  <dialog id="screen-dialog" aria-labelledby="zoom-title"><div class="dialog-heading"><h2 id="zoom-title">Reservas</h2><button class="close" aria-label="Cerrar captura"><svg class="icon"><use href="#close"/></svg></button></div><img id="zoom-img" alt="" width="585" height="1215"></dialog>
+  <dialog id="credit-dialog" aria-labelledby="credit-title"><div class="dialog-heading"><h2 id="credit-title">Créditos</h2><button class="close" aria-label="Cerrar créditos"><svg class="icon"><use href="#close"/></svg></button></div><p>Capturas de Aura Spa con datos de ejemplo para esta presentación.</p><p>Fotografía de portada de <a href="https://www.pexels.com/photo/person-holding-hot-stones-5378219/" target="_blank" rel="noopener">Engin Akyurt</a>. Fotografía de la vela y las piedras de <a href="https://www.pexels.com/photo/serene-spa-setting-with-candle-and-smoke-31390599/" target="_blank" rel="noopener">Kader D. Kahraman</a>.</p></dialog>
+</body>
+</html>
